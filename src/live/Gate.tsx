@@ -10,6 +10,7 @@ import {setLanguage, t} from '../i18n';
 import {ApiError, type Player, api} from '../net/api';
 import {COUNTRIES, guessCountry, languageFor} from './countries';
 import {STARTER_SKINS} from './skins';
+import {SANDBOX_ENABLED, SANDBOX_PATH} from '../sandbox/flag';
 
 type Mode = 'signin' | 'request';
 type Availability = 'idle' | 'checking' | 'free' | 'taken';
@@ -177,6 +178,15 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
 
   return (
     <div className="mx-auto mt-16 w-full max-w-sm px-6 pb-16">
+      {SANDBOX_ENABLED && (
+        <a
+          href={SANDBOX_PATH}
+          className="mb-8 block rounded-lg border border-cyan-800/70 bg-cyan-950/30 px-4 py-3 text-cyan-100 hover:border-cyan-500"
+        >
+          <span className="block text-sm font-semibold">Field Sandbox</span>
+          <span className="block text-[13px] text-cyan-200/80">Practice patrol with General Rider. No account needed; nothing is saved to a base.</span>
+        </a>
+      )}
       <p className="text-xs uppercase tracking-[0.3em] text-orange-500">World War Rogue</p>
       <h1 className="mt-2 text-2xl font-semibold text-neutral-100">
         {requesting ? t('gate.requestTitle') : t('gate.signInTitle')}

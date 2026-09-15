@@ -26,6 +26,12 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, 'src'),
       },
     },
+    preview: {
+      // `vite preview` only. A private preview reached through a proxy (for
+      // example a tailnet-only HTTPS name) sends that name as the Host, which
+      // Vite refuses unless listed. Comma-separated; unset = localhost only.
+      allowedHosts: process.env.WWR_PREVIEW_HOSTS ? process.env.WWR_PREVIEW_HOSTS.split(',').map((h) => h.trim()) : [],
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

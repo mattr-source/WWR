@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">WWR prototype unit: Support (top-down, facing up). Original placeholder art.</title>
+  <g stroke="#1b1f1a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <ellipse cx="64" cy="66" rx="48" ry="48" fill="#000" fill-opacity=".14" stroke="none"/>
+    <!-- six short legs -->
+    <path d="M64 64 L64 18 M64 64 L104 41 M64 64 L104 87 M64 64 L64 110 M64 64 L24 87 M64 64 L24 41" fill="none" stroke-width="7"/>
+    <circle cx="104" cy="41" r="6" fill="#5b636b"/>
+    <circle cx="104" cy="87" r="6" fill="#5b636b"/>
+    <circle cx="24" cy="87" r="6" fill="#5b636b"/>
+    <circle cx="24" cy="41" r="6" fill="#5b636b"/>
+    <!-- folded manipulator arms with wrench tools (forward) -->
+    <path d="M50 42 L40 16 M78 42 L88 16" fill="none" stroke-width="7"/>
+    <path d="M50 42 L40 16 M78 42 L88 16" fill="none" stroke="#8a939b" stroke-width="2.5"/>
+    <path d="M34 8 A7 7 0 1 0 46 8 L43 14 H37 Z" fill="#5b636b" stroke-width="2.5"/>
+    <path d="M82 8 A7 7 0 1 0 94 8 L91 14 H85 Z" fill="#5b636b" stroke-width="2.5"/>
+    <!-- hexagonal hull -->
+    <path d="M64 34 L90 49 V79 L64 94 L38 79 V49 Z" fill="#6b7a3a"/>
+    <!-- accent stripe -->
+    <path d="M40 52 L64 38 L88 52" fill="none" stroke="#f28c28" stroke-width="5"/>
+    <!-- glowing repair ring -->
+    <circle cx="64" cy="64" r="14" fill="#5b636b"/>
+    <circle cx="64" cy="64" r="10" fill="none" stroke="#3fc1c9" stroke-width="5"/>
+    <!-- blank company plate -->
+    <rect x="56" y="81" width="16" height="7" rx="1.5" fill="#d9d4c3" stroke-width="2"/>
+    <!-- docked maintenance drone (rear) -->
+    <path d="M54 104 L74 116 M74 104 L54 116" fill="none" stroke-width="2.5"/>
+    <circle cx="54" cy="104" r="3.5" fill="#8a939b" stroke-width="2"/>
+    <circle cx="74" cy="104" r="3.5" fill="#8a939b" stroke-width="2"/>
+    <circle cx="54" cy="116" r="3.5" fill="#8a939b" stroke-width="2"/>
+    <circle cx="74" cy="116" r="3.5" fill="#8a939b" stroke-width="2"/>
+    <circle cx="64" cy="110" r="5" fill="#3fc1c9" stroke-width="2"/>
+  </g>
+</svg>

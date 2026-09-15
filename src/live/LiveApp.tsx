@@ -23,6 +23,7 @@ const ArenaScreen = lazy(() => import('./Arena'));
 const WarfrontScreen = lazy(() => import('./Warfront'));
 const ConvoyScreen = lazy(() => import('./Convoy'));
 import {guideEvent} from './guide/bus';
+import {SANDBOX_ENABLED, SANDBOX_PATH} from '../sandbox/flag';
 import {HUB_OF_CATEGORY} from '../../shared/buildings';
 import {remaining} from './BuildingPanel';
 import {Suspense, lazy, useCallback, useEffect, useState} from 'react';
@@ -153,6 +154,11 @@ export function PlayerPanel({
         <button onClick={onOpenDev} className={`${item} text-cyan-300`}>
           Dev · progression seeds
         </button>
+      )}
+      {SANDBOX_ENABLED && (
+        <a href={SANDBOX_PATH} className={`${item} text-cyan-300`}>
+          Field Sandbox (practice)
+        </a>
       )}
       <button onClick={onOpenSettings} className={`${item} border-t border-neutral-800`}>
         {t('settings.title')}

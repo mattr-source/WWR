@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">WWR prototype unit: Assault (top-down, facing up). Original placeholder art.</title>
+  <g stroke="#1b1f1a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <ellipse cx="64" cy="70" rx="52" ry="44" fill="#000" fill-opacity=".14" stroke="none"/>
+    <!-- wide caterpillar tracks -->
+    <rect x="12" y="24" width="24" height="88" rx="6" fill="#5b636b"/>
+    <rect x="92" y="24" width="24" height="88" rx="6" fill="#5b636b"/>
+    <path d="M16 36 H32 M16 48 H32 M16 60 H32 M16 72 H32 M16 84 H32 M16 96 H32 M96 36 H112 M96 48 H112 M96 60 H112 M96 72 H112 M96 84 H112 M96 96 H112" fill="none" stroke-width="2"/>
+    <!-- broad squat hull with angled front armor -->
+    <path d="M32 50 L46 32 H82 L96 50 V106 H32 Z" fill="#6b7a3a"/>
+    <path d="M38 50 L48 38 H80 L90 50 Z" fill="#4c5729" stroke-width="2"/>
+    <!-- accent stripes on front armor corners -->
+    <path d="M34 54 L44 42 M94 54 L84 42" fill="none" stroke="#f28c28" stroke-width="5"/>
+    <!-- turret + long heavy cannon -->
+    <rect x="58" y="6" width="12" height="52" rx="2" fill="#5b636b"/>
+    <rect x="54" y="4" width="20" height="9" rx="2" fill="#8a939b"/>
+    <circle cx="64" cy="74" r="21" fill="#8a939b"/>
+    <circle cx="64" cy="74" r="9" fill="#5b636b" stroke-width="2"/>
+    <!-- blank company plate -->
+    <rect x="56" y="97" width="16" height="7" rx="1.5" fill="#d9d4c3" stroke-width="2"/>
+  </g>
+</svg>

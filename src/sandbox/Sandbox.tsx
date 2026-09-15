@@ -312,7 +312,7 @@ export default function Sandbox() {
         )}
 
         {/* Honest label: the robot troops, Dominion machines and fitted kit on the map are provisional. */}
-        <p className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[70%] rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
+        <p className="pointer-events-none absolute right-2 top-[4.25rem] z-10 max-w-[40%] rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-right text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
           Temporary art: robots, Dominion machines, fitted kit
         </p>
 

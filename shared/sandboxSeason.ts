@@ -1,7 +1,9 @@
 /**
- * The Field Sandbox's season configuration: every tunable number the
- * sandbox engine (shared/sandbox.ts) plays by, in one typed, versioned,
- * validated object.
+ * The Field Sandbox's season configuration: the robot, cost, timer, march
+ * and battle numbers the sandbox engine (shared/sandbox.ts) plays by, in one
+ * typed, versioned, validated object. (Enemy stats, the patrol reward and
+ * the Field Workshop steps are still constants in shared/sandbox.ts, equally
+ * test-only.)
  *
  *   TEST-ONLY BALANCE. Nothing here is an economy ruling, a price, a timer
  *   ruling or a live-game number. It exists so a private test build can be
@@ -17,8 +19,9 @@
  * A second config (a later season, an event) is another object passed to
  * the engine; `validateSandboxSeason` refuses one that cannot be played.
  */
+import {ASSETS} from './assets';
 import {EXERCISES_PER_DAY} from './exercises';
-import {SEASON_WEEKS} from './season';
+import {SEASON_WEEKS, STARTER_ASSETS} from './season';
 import {SEASON_1_ID, SEASON_1_NAME} from './season1Ops';
 
 export const SANDBOX_SEASON_SCHEMA = 1;
@@ -71,7 +74,7 @@ export interface SandboxSeasonConfig {
   robotMaxLevel: number;
   roles: Record<RobotRole, RoleSpec>;
   partBonus: Record<PartSlot, PartBonus>;
-  /** Index = the level being reached (2..max). Index 0 and 1 unused. */
+  /** Index = the level being reached (2..max). Index 0 and 1 unused. The Season 1 test slice charges supplies only (credits 0). */
   upgradeCost: ReadonlyArray<Supplies & {credits: number}>;
   upgradeMinutes: readonly number[];
 
@@ -88,6 +91,15 @@ export interface SandboxSeasonConfig {
   marchBaseSeconds: number;
   marchSecondsPerUnit: number;
   holdSeconds: number;
+
+  /** The starter Assets that march with the robot troops: real asset ids from the Season 1 starter set, at least one drone. */
+  taskForceAssets: readonly string[];
+  /** TEST mapping: an Asset's real firepower attribute times this is its share of a sandbox volley. */
+  assetFirepowerScale: number;
+  /** A battle that is not decided in this many rounds ends with the Task Force withdrawing. */
+  battleRoundCap: number;
+  /** How long one round plays on the map; the column stays at the target for rounds x this. */
+  roundSeconds: number;
 }
 
 const r = (fuel: number, steel: number, munitions: number, alloy: number): Supplies => ({fuel, steel, munitions, alloy});
@@ -160,6 +172,16 @@ export function validateSandboxSeason(value: unknown): string[] {
   if (!supplies(p.remanufactureCost) || !positive(p.remanufactureMinutes)) errors.push('remanufactureCost and remanufactureMinutes are required');
   if (!(typeof p.emergencySlowdown === 'number' && p.emergencySlowdown >= 1)) errors.push('emergencySlowdown must be >= 1');
   if (!nonNeg(p.marchBaseSeconds) || !nonNeg(p.marchSecondsPerUnit) || !positive(p.holdSeconds)) errors.push('march and hold times must be non-negative (hold > 0)');
+  const starters = STARTER_ASSETS as readonly string[];
+  if (!Array.isArray(p.taskForceAssets) || p.taskForceAssets.length < 1 || p.taskForceAssets.length > 6 || !p.taskForceAssets.every((id) => starters.includes(id as string))) {
+    errors.push('taskForceAssets must list 1-6 Season 1 starter asset ids');
+  } else {
+    if (new Set(p.taskForceAssets).size !== p.taskForceAssets.length) errors.push('taskForceAssets must not repeat an asset');
+    if (!p.taskForceAssets.some((id) => ASSETS.find((a) => a.id === id)?.category === 'drone')) errors.push('taskForceAssets needs a drone: every Task Force marches with one');
+  }
+  if (!positive(p.assetFirepowerScale)) errors.push('assetFirepowerScale must be > 0');
+  if (!Number.isInteger(p.battleRoundCap) || (p.battleRoundCap as number) < 1 || (p.battleRoundCap as number) > 30) errors.push('battleRoundCap must be 1-30');
+  if (!positive(p.roundSeconds)) errors.push('roundSeconds must be > 0');
   return errors;
 }
 
@@ -207,13 +229,13 @@ export const SANDBOX_SEASON_1_TEST = defineSandboxSeason({
     support: {label: 'Support', blurb: 'Patches the most damaged robot in the fight each round.', baseHp: 70, baseDamage: 6, baseHeal: 10, gearName: 'Repair arm and drone pack'},
   },
   partBonus: {
-    head: {hpPct: 0, damagePct: 0.12, heal: 0},
+    head: {hpPct: 0, damagePct: 0.12, heal: 1},
     torso: {hpPct: 0.15, damagePct: 0, heal: 0},
     legs: {hpPct: 0.1, damagePct: 0.04, heal: 0},
     arms: {hpPct: 0, damagePct: 0.15, heal: 1},
     gear: {hpPct: 0.08, damagePct: 0.08, heal: 2},
   },
-  upgradeCost: [c(0, 0, 0, 0, 0), c(0, 0, 0, 0, 0), ...Array.from({length: MAX - 1}, (_, i) => scaleCost(c(220, 280, 120, 160, 40), i + 2))],
+  upgradeCost: [c(0, 0, 0, 0, 0), c(0, 0, 0, 0, 0), ...Array.from({length: MAX - 1}, (_, i) => scaleCost(c(220, 280, 120, 160, 0), i + 2))],
   // 1 min to level 2, 30 min to level 10, then +3 min a level: 150 min to level 50.
   upgradeMinutes: [0, 0, 1, 2, 3, 5, 8, 12, 16, 20, 30, ...Array.from({length: MAX - 10}, (_, i) => 30 + 3 * (i + 1))],
 
@@ -226,4 +248,10 @@ export const SANDBOX_SEASON_1_TEST = defineSandboxSeason({
   marchBaseSeconds: 8,
   marchSecondsPerUnit: 0.09,
   holdSeconds: 45,
+
+  // Real starter Assets (shared/season.ts STARTER_ASSETS): heavy armour, a gunship and the drone.
+  taskForceAssets: ['m1a2', 'mi35m', 'rq4'],
+  assetFirepowerScale: 2,
+  battleRoundCap: 12,
+  roundSeconds: 2.4,
 });

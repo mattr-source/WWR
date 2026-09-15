@@ -11,8 +11,9 @@ import {
   type SandboxAction,
   type SandboxState,
   applyAction,
+  type SandboxRejection,
   createSandbox,
-  parseSandbox,
+  readSandbox,
   sandboxNow,
   settle,
 } from '../../shared/sandbox';
@@ -26,12 +27,14 @@ export interface KeyValue {
   removeItem(key: string): void;
 }
 
-function read(kv: KeyValue): SandboxState | null {
+function read(kv: KeyValue): {raw: string | null; state: SandboxState | null; rejected: SandboxRejection | null} {
+  let raw: string | null = null;
   try {
-    const raw = kv.getItem(SANDBOX_STORAGE_KEY);
-    return raw ? parseSandbox(JSON.parse(raw)) : null;
+    raw = kv.getItem(SANDBOX_STORAGE_KEY);
+    if (!raw) return {raw, state: null, rejected: 'empty'};
+    return {raw, ...readSandbox(JSON.parse(raw))};
   } catch {
-    return null;
+    return {raw, state: null, rejected: 'invalid'};
   }
 }
 
@@ -43,12 +46,24 @@ export function saveSandbox(kv: KeyValue, state: SandboxState): void {
   }
 }
 
-/** The stored sandbox with finished timers folded in, or a new one. */
-export function loadSandbox(kv: KeyValue, realNow: number): SandboxState {
+/** Why a stored practice save could not be kept, in words for the screen. Null when nothing was lost. */
+export function resetNotice(rejected: SandboxRejection | null): string | null {
+  if (rejected === 'schema' || rejected === 'config') return 'The practice test build changed, so this sandbox started over. Nothing real was affected.';
+  if (rejected === 'invalid') return 'The saved practice sandbox could not be read, so it started over. Nothing real was affected.';
+  return null;
+}
+
+/** The stored sandbox with finished timers folded in, or a new one - and, if a save was replaced, why. */
+export function openSandbox(kv: KeyValue, realNow: number): {state: SandboxState; notice: string | null} {
   const stored = read(kv);
-  const state = stored ? settle(stored, sandboxNow(stored, realNow)) : createSandbox(realNow);
-  if (state !== stored) saveSandbox(kv, state);
-  return state;
+  const state = stored.state ? settle(stored.state, sandboxNow(stored.state, realNow)) : createSandbox(realNow);
+  const json = JSON.stringify(state);
+  if (json !== stored.raw) saveSandbox(kv, state);
+  return {state, notice: resetNotice(stored.rejected)};
+}
+
+export function loadSandbox(kv: KeyValue, realNow: number): SandboxState {
+  return openSandbox(kv, realNow).state;
 }
 
 export function dispatchSandbox(kv: KeyValue, actionId: string, action: SandboxAction, realNow: number): ActionResult {

@@ -23,6 +23,7 @@ import {
   engineerMultiplier,
   shortfall,
 } from '../../shared/buildings';
+import {balanceProfileById} from '../../shared/balance';
 import {formatClock} from '../../shared/gametime';
 import {guideEvent} from './guide/bus';
 
@@ -88,7 +89,9 @@ export default function BuildingPanel({
   const level = base.levels[building];
   const next = level + 1;
   const cap = buildingCapForSeason(base.season);
-  const step = buildingStep(building, next);
+  // The profile the server named; an id this build does not know prices from
+  // the shipped tables, and the server's own refusal is the final word.
+  const step = buildingStep(building, next, balanceProfileById(base.balance?.id));
   const blocked = buildingBlock(building, base.levels, base.season);
   const short = shortfall(base.resources, step.cost);
   const queueFull = running.length >= base.queues;

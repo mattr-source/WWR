@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit && tsc --noEmit -p worker && node scripts/simulate.mjs --only audit && node scripts/terrain-audit.mjs",
     "test": "node --import tsx --test \"tools/tests/*.test.ts\"",
     "sim": "node scripts/simulate.mjs",
+    "sim:pacing": "node --import tsx tools/sim/seasonPacingReport.ts",
     "terrain": "node scripts/terrain-audit.mjs",
     "db:migrate": "wrangler d1 migrations apply wwr-db --remote",
     "db:migrate:local": "wrangler d1 migrations apply wwr-db --local",

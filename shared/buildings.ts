@@ -23,6 +23,7 @@
  * x1.02^9. That sits on top of Service Rank and under packages.
  */
 import type {AssetCategory} from './assets';
+import type {BuildingBalance} from './balance';
 
 /* -------------------------------------------------------------------------- */
 /* Buildings                                                                  */
@@ -269,28 +270,68 @@ export interface BuildingStep {
   ms: number;
 }
 
-/** What reaching `toLevel` costs and how long it takes. */
-export function buildingStep(building: LevelledBuilding, toLevel: number): BuildingStep {
+/** Which timer table a building reads. */
+export type TimerGroup = 'commandCenter' | 'hub' | 'producer' | 'department';
+export const TIMER_GROUPS: readonly TimerGroup[] = ['commandCenter', 'hub', 'producer', 'department'];
+
+export function timerGroupOf(building: LevelledBuilding): TimerGroup {
+  if (building === 'command_center') return 'commandCenter';
+  if (HUBS.has(building)) return 'hub';
+  return PRODUCERS.has(building) ? 'producer' : 'department';
+}
+
+/** The designed levels a balance profile may retune: 2 to 10, index 0 = level 2. */
+export const DESIGNED_FROM_LEVEL = 2;
+export const DESIGNED_TO_LEVEL = 10;
+
+/**
+ * The timer tables as shipped, levels 2-10 in minutes. The default balance
+ * profile (shared/balance.ts) IS these arrays, so the default can never drift
+ * from what the game charged before profiles existed.
+ */
+export const SHIPPED_BUILDING_MINUTES: Readonly<Record<TimerGroup, readonly number[]>> = {
+  commandCenter: COMMAND_CENTER_ROWS.slice(2).map((row) => row.minutes),
+  hub: HUB_MINUTES.slice(2),
+  producer: PRODUCER_MINUTES.slice(2),
+  department: DEPT_MINUTES.slice(2),
+};
+
+/**
+ * What reaching `toLevel` costs and how long it takes.
+ *
+ * `balance` is the season's balance profile. Absent, the shipped tables
+ * apply exactly as they always have. A profile retunes only the designed
+ * levels 2-10 (timers for every group, and a Command Center cost
+ * multiplier); past 10 the placeholder extrapolation runs from the profile's
+ * level-10 row. A profile's `maxBuildMinutes`, when set, clamps every level.
+ *
+ * Only a job's START reads this. The job row stores its completion instant,
+ * so a profile changed while a timer runs never moves that timer.
+ */
+export function buildingStep(
+  building: LevelledBuilding,
+  toLevel: number,
+  balance?: BuildingBalance,
+): BuildingStep {
   const l = Math.max(2, Math.floor(toLevel));
   const past = Math.max(0, l - 10);
   const idx = Math.min(10, l);
+  const minutesTable = balance ? balance.timers : SHIPPED_BUILDING_MINUTES;
+  let minutes = Math.round(minutesTable[timerGroupOf(building)][idx - 2] * 1.5 ** past);
+  if (balance && balance.maxBuildMinutes !== null) minutes = Math.min(minutes, balance.maxBuildMinutes);
   if (building === 'command_center') {
     const rowAt = COMMAND_CENTER_ROWS[idx];
+    const multiplier = balance ? balance.commandCenterCostMultiplier[idx - 2] : 1;
     return {
-      cost: scale(rowAt.cost, 1.3 ** past),
-      ms: Math.round(rowAt.minutes * 1.5 ** past) * 60_000,
+      cost: scale(rowAt.cost, 1.3 ** past * multiplier),
+      ms: minutes * 60_000,
     };
   }
   const base = BASE_ROW[building];
   const scaleTable = HUBS.has(building) ? HUB_SCALE : DEPT_SCALE;
-  const minutes = HUBS.has(building)
-    ? HUB_MINUTES
-    : PRODUCERS.has(building)
-      ? PRODUCER_MINUTES
-      : DEPT_MINUTES;
   return {
     cost: scale(base, scaleTable[idx] * 1.3 ** past),
-    ms: Math.round(minutes[idx] * 1.5 ** past) * 60_000,
+    ms: minutes * 60_000,
   };
 }
 

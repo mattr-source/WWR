@@ -17,6 +17,7 @@ import type {Lane, Reward} from '../../shared/season1Ops';
 import type {ExerciseView} from '../../shared/exercises';
 import type {ScoreBreakdown} from '../../shared/arena';
 import type {CombatEvent, CombatantSpec} from '../../shared/combat';
+import type {BalanceProfileRef} from '../../shared/balance';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -535,6 +536,8 @@ export interface BaseJobView {
 
 /** The levelled base: every building's level, the jobs running, the stock. */
 export interface BaseLevelsView {
+  /** The balance profile the server priced upgrades from (shared/balance.ts); null if misconfigured. */
+  balance?: BalanceProfileRef | null;
   levels: BuildingLevels;
   jobs: BaseJobView[];
   queues: number;

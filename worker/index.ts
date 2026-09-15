@@ -41,6 +41,7 @@ import {NEW_SHIELD_MS, isShielded} from '../shared/shields';
 import {type LevelledBuilding, rankCeiling, signalsLeadMs} from '../shared/buildings';
 import {BOARD_BUILDING_BY_ID} from '../shared/base';
 import {isPackageKey} from '../shared/upgrades';
+import {balanceRef, selectBalanceProfile} from '../shared/balance';
 import {type Split} from '../shared/economy';
 import {launchExercise, 
   deployments,
@@ -187,6 +188,12 @@ export interface Env {
    * (worker/devProgression.ts). Set ONLY under env.test in wrangler.jsonc.
    */
   ALLOW_DEV_PROGRESSION_SEEDS?: string;
+  /**
+   * The balance profile building upgrades are priced from (shared/balance.ts),
+   * as "id" or "id@version". Unset = the shipped tables. Set ONLY under env.test
+   * in wrangler.jsonc; an unknown or mis-versioned name pauses upgrade starts.
+   */
+  WWR_BALANCE_PROFILE?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -1200,7 +1207,7 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     ),
     // The Command Center and asset-building levels, so every asset card can
     // draw the attributes the building boost gives without a second request.
-    base: {...baseLevelsView(base), season: CURRENT_SEASON, wallet: {tokens: wallet.tokens, credits: wallet.credits}},
+    base: {...baseLevelsView(base, env), season: CURRENT_SEASON, wallet: {tokens: wallet.tokens, credits: wallet.credits}},
     season1: await readSeasonState(env.DB, player.id, now),
     deltaOpen: await deltaOpen(env.DB, player.id, base.levels.command_center, now),
     // Echoed so the squad screen can show them without asking for the base
@@ -1249,9 +1256,21 @@ function buildingName(b: LevelledBuilding): string {
   return b === 'command_center' ? 'Command Center' : BOARD_BUILDING_BY_ID[b]?.name ?? b;
 }
 
+/**
+ * The balance profile this server prices building upgrades from. Read per
+ * request from the environment, so there is one place that decides it.
+ */
+function balanceFor(env: Env) {
+  return selectBalanceProfile(env.WWR_BALANCE_PROFILE);
+}
+
 /** The base's levelled state as the client reads it. */
-function baseLevelsView(base: Awaited<ReturnType<typeof readBase>>) {
+function baseLevelsView(base: Awaited<ReturnType<typeof readBase>>, env: Env) {
+  const balance = balanceFor(env);
   return {
+    // Which profile priced the timers on screen, so the client shows the same
+    // numbers and a tester can see what is live. Null when misconfigured.
+    balance: balance.ok ? balanceRef(balance.profile) : null,
     levels: base.levels,
     jobs: base.jobs,
     queues: base.queues,
@@ -2906,7 +2925,7 @@ async function route(
       settleWallet(env.DB, player.id, now),
     ]);
     return json({
-      ...baseLevelsView(base),
+      ...baseLevelsView(base, env),
       season: CURRENT_SEASON,
       wallet: {tokens: wallet.tokens, credits: wallet.credits},
     });
@@ -2915,14 +2934,38 @@ async function route(
   if (endpoint === 'POST /api/base/level') {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const building = typeof body?.building === 'string' ? body.building : '';
-    const result = await startLevel(env.DB, player.id, building, CURRENT_SEASON, Date.now(), buildingName);
+    const balance = balanceFor(env);
+    if (!balance.ok) {
+      // Refuse loudly rather than price the upgrade from a profile nobody chose.
+      console.error(`WWR_BALANCE_PROFILE: ${balance.error}`);
+      return fail(503, 'Building upgrades are paused while the server is reconfigured. Try again shortly.');
+    }
+    const result = await startLevel(
+      env.DB, player.id, building, CURRENT_SEASON, Date.now(), buildingName, balance.profile,
+    );
     if (!result.ok) return fail(400, result.error);
+    if (balance.profile.status !== 'default') {
+      // base_jobs has no column for the profile (a schema change, not made
+      // here); Workers Logs keep the record of which table priced this job.
+      const job = result.base.jobs.find((j) => j.building === building);
+      console.log(
+        JSON.stringify({
+          event: 'base_job_started',
+          player: player.id,
+          building,
+          toLevel: job?.toLevel ?? null,
+          jobId: job?.id ?? null,
+          completesAt: job?.completesAt ?? null,
+          balance: `${balance.profile.id}@${balance.profile.version}`,
+        }),
+      );
+    }
     // Daily Operations, Command lane: the upgrade has started and been paid for.
     await noteDailyProgress(env.DB, player.id, 'command', Date.now()).catch(() => undefined);
     const wallet = await settleWallet(env.DB, player.id, Date.now());
     return json({
       ok: true,
-      ...baseLevelsView(result.base),
+      ...baseLevelsView(result.base, env),
       season: CURRENT_SEASON,
       wallet: {tokens: wallet.tokens, credits: wallet.credits},
     });
@@ -2937,7 +2980,7 @@ async function route(
     if (!result.ok) return fail(400, result.error);
     return json({
       ok: true,
-      ...baseLevelsView(result.base),
+      ...baseLevelsView(result.base, env),
       season: CURRENT_SEASON,
       wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
       bought: result.bought,
@@ -2952,7 +2995,7 @@ async function route(
     if (!result.ok) return fail(400, result.error);
     return json({
       ok: true,
-      ...baseLevelsView(result.base),
+      ...baseLevelsView(result.base, env),
       season: CURRENT_SEASON,
       wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
     });

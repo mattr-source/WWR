@@ -43,6 +43,7 @@ import {
   shortfall,
   storageCap,
 } from '../shared/buildings';
+import {type BalanceProfile, DEFAULT_BALANCE_PROFILE} from '../shared/balance';
 import {type Split, defaultSplit, splitIsValid} from '../shared/economy';
 import {gameDayStart} from '../shared/gametime';
 import {type Wallet, claimWallet, ledger, settleWallet} from './upgrades';
@@ -236,6 +237,10 @@ export type StartResult = {ok: true; base: BaseState} | {ok: false; error: strin
  * Gates in the order a player wants to hear them: the season cap, the Command
  * Center ceiling, the Warehouse, the queue, then the resources. The level
  * built is always current + 1.
+ *
+ * `balance` prices the level and its timer (shared/balance.ts). It is read
+ * here, at the start, and nowhere else: the job row keeps the completion
+ * instant, so a later profile change leaves running timers where they are.
  */
 export async function startLevel(
   db: D1Database,
@@ -244,6 +249,7 @@ export async function startLevel(
   season: number,
   now: number,
   name: (b: LevelledBuilding) => string,
+  balance: BalanceProfile = DEFAULT_BALANCE_PROFILE,
 ): Promise<StartResult> {
   if (!isLevelledBuilding(buildingId)) return {ok: false, error: 'That building does not level.'};
   const building = buildingId;
@@ -265,7 +271,7 @@ export async function startLevel(
   }
 
   const toLevel = base.levels[building] + 1;
-  const step = buildingStep(building, toLevel);
+  const step = buildingStep(building, toLevel, balance);
   // The Engineer Support Yard shortens timers started after its level is
   // complete; a timer already running never changes. BUILDING EFFECTS v1.
   const ms = Math.round(step.ms * engineerMultiplier(base.levels.engineer_support_yard));

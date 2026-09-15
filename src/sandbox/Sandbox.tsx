@@ -69,6 +69,7 @@ import {RobotFigure} from './RobotFigure';
 import Comms from './Comms';
 import {ArtCard, BoardThumb, BuildingImg, BuildingInfo, PropThumb, RepairYard, SceneTab} from './BasePanels';
 import HomeBase, {type BaseTarget, buildingLabel} from './HomeBase';
+import SeasonHub from './SeasonHub';
 import SectorMap from './SectorMap';
 import {SANDBOX_STORAGE_KEY, dispatchSandbox, openSandbox, resetSandbox} from './store';
 import {Bar, CostLine, SUPPLY_LABEL, SUPPLY_TONE, Section, Sheet, TempArtTag, clock, minutesLabel, primary, secondary, testButton} from './ui';
@@ -80,7 +81,7 @@ const ROUND_MS = CONFIG.roundSeconds * 1000;
 /** Accidental double taps are closer together than this. */
 const TAP_GUARD_MS = 350;
 
-type SheetKind = null | 'bay' | 'hangar' | 'ops' | 'more' | 'repair' | 'info';
+type SheetKind = null | 'bay' | 'hangar' | 'ops' | 'more' | 'repair' | 'info' | 'season';
 type Scene = 'base' | 'world';
 
 /** The scene lives in the URL hash, so a reload lands on the same view without another storage key. */
@@ -223,7 +224,7 @@ export default function Sandbox() {
   const attention = (on: boolean) => (on ? ' sbx-attention' : '');
   const wantWorld = want === 'site.select' || want === 'march.start' || want === 'march.arrive' || want === 'battle.seen';
   const baseHighlight: BaseTarget['kind'] | null =
-    want === 'robot.upgrade' || want === 'upgrade.done' ? 'bay' : want === 'recover' ? 'repair' : want === 'ops.cache' ? 'ops' : wantWorld ? 'world' : null;
+    want === 'robot.upgrade' || want === 'upgrade.done' ? 'bay' : want === 'recover' ? 'repair' : want === 'ops.cache' ? 'season' : wantWorld ? 'world' : null;
   const openBase = (t: BaseTarget) => {
     if (t.kind === 'world') setScene('world');
     else if (t.kind === 'bay') setSheet('bay');
@@ -232,6 +233,7 @@ export default function Sandbox() {
       setHangarFocus(t.assetId);
       setSheet('hangar');
     } else if (t.kind === 'ops') setSheet('ops');
+    else if (t.kind === 'season') setSheet('season');
     else if (t.kind === 'record' || t.kind === 'command') setSheet('more');
     else {
       setInfoBuilding(t.buildingId);
@@ -255,6 +257,10 @@ export default function Sandbox() {
             <span className="mt-0.5 block truncate text-[11px] text-neutral-400">
               {CONFIG.seasonName} · week {week} · sandbox day {day + 1}
             </span>
+          </button>
+          <button className={`relative flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/80 bg-gradient-to-b from-amber-900/80 to-black px-1`} onClick={() => setSheet('season')} aria-label={`Season 1 Events: week ${week}`} data-hud-events>
+            <img src="/base/building-tactical-operations-center.webp" alt="" className="h-6 w-9 object-contain" />
+            <span className="text-[9px] font-bold uppercase leading-none tracking-wide text-amber-200">Events</span>
           </button>
           <span className="shrink-0 rounded border border-amber-700/70 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight tracking-wider text-amber-300">
             Practice
@@ -424,10 +430,11 @@ export default function Sandbox() {
               )}
             </div>
           )}
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-5 gap-1">
             <SceneTab label="Home Base" active={scene === 'base'} art={<BoardThumb />} badge={needsBay || needsHangar ? '!' : null} pulse={!!baseHighlight && baseHighlight !== 'world' && scene !== 'base'} onClick={() => setScene('base')} />
             <SceneTab label="World Map" active={scene === 'world'} art={<PropThumb name="hardy_tree_b" />} badge={m ? '•' : null} pulse={wantWorld && scene !== 'world'} onClick={() => setScene('world')} />
-            <SceneTab label="Operations" active={sheet === 'ops'} art={<img src="/base/building-tactical-operations-center.webp" alt="" className="h-full w-full object-contain" />} pulse={want === 'ops.cache'} onClick={() => setSheet('ops')} />
+            <SceneTab label="Events" ariaLabel="Season 1 Events" active={sheet === 'season'} art={<img src="/guide/rider-portrait.webp" alt="" className="h-full w-full object-cover object-top" />} onClick={() => setSheet('season')} />
+            <SceneTab label="Operations" active={sheet === 'ops'} art={<img src="/base/building-depot.webp" alt="" className="h-full w-full object-contain" />} pulse={want === 'ops.cache'} onClick={() => setSheet('ops')} />
             <SceneTab label="Reports" ariaLabel="Reports: record and test controls" active={sheet === 'more'} art={<img src="/base/building-signals-center.webp" alt="" className="h-full w-full object-contain" />} onClick={() => setSheet('more')} />
           </div>
         </div>
@@ -487,6 +494,21 @@ export default function Sandbox() {
       {sheet === 'info' && infoBuilding && (
         <Sheet title={buildingLabel(infoBuilding)} onClose={() => setSheet(null)}>
           <BuildingInfo buildingId={infoBuilding} />
+        </Sheet>
+      )}
+      {sheet === 'season' && (
+        <Sheet title="Season 1 · Events" onClose={() => setSheet(null)}>
+          <SeasonHub
+            state={state}
+            now={now}
+            realNow={wall}
+            onOpenOps={() => setSheet('ops')}
+            onGoToSite={(siteId) => {
+              setSheet(null);
+              setScene('world');
+              if (!state.march && state.selectedSite !== siteId) act({type: 'site.select', siteId});
+            }}
+          />
         </Sheet>
       )}
       {sheet === 'ops' && (

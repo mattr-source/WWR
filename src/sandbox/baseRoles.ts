@@ -10,6 +10,7 @@ export type BaseTarget =
   | {kind: 'repair'}
   | {kind: 'hangar'; assetId: string | null}
   | {kind: 'ops'}
+  | {kind: 'season'}
   | {kind: 'record'}
   | {kind: 'command'}
   | {kind: 'world'}
@@ -25,7 +26,7 @@ export const BUILDING_ROLE: Record<string, {target: BaseTarget; role: string} | 
   armour_hub: {target: {kind: 'hangar', assetId: 'm1a2'}, role: 'Hangar: Abrams'},
   rotary_hub: {target: {kind: 'hangar', assetId: 'mi35m'}, role: 'Hangar: Hind'},
   drone_hub: {target: {kind: 'hangar', assetId: 'rq4'}, role: 'Hangar: Global Hawk'},
-  tactical_operations_center: {target: {kind: 'ops'}, role: 'Operations'},
+  tactical_operations_center: {target: {kind: 'season'}, role: 'Season 1 Events'},
   signals_center: {target: {kind: 'record'}, role: 'Reports'},
   fuel_point: null,
   garrison_barracks: null,

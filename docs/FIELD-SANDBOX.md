@@ -99,7 +99,7 @@ The sandbox has two scenes, like the live game. The current one is in the URL ha
   | Fabrication Shop | Robot Bay (robots, Field Workshop) |
   | Materials Recovery Yard | Repairs: every damaged robot and Asset with its art, repair or remanufacture |
   | Armour / Rotary / Drone buildings | Hangar at the Abrams / Hind / Global Hawk, upgrades open |
-  | Tactical Operations Center | Operations (objectives, Daily Operations lanes, Cache) |
+  | Tactical Operations Center | Season 1 Events hub (below) |
   | Signals Center, Command Center | Reports (Task Force, service record, test controls) |
   | Task Force Alpha slab | World Map |
   | All other buildings, Task Forces Bravo to Delta | A plain "no function in the practice sandbox" sheet with the art |
@@ -110,11 +110,37 @@ The sandbox has two scenes, like the live game. The current one is in the URL ha
   arithmetic of `src/live/terrainPaint.ts` (which the sandbox may not import). Practice world id 1, season 1, home
   plot (34, 22). Props are kept off targets, the base and the Task Force. The home-base marker on the map goes back
   to Home Base.
-- **Navigation:** bottom tabs with art (board crop, terrain prop, TOC, Signals Center): Home Base, World Map,
-  Operations, Reports. The march strip shows on both scenes, with "Map ›" from the base.
+- **Navigation:** bottom tabs with art (board crop, terrain prop, General Rider, depot, Signals Center): Home Base,
+  World Map, Events, Operations, Reports. The HUD has an Events button. The march strip shows on both scenes, with "Map ›" from the base.
 - **Comms** (`src/sandbox/Comms.tsx`): the live Comms bar and full-screen panel look with the tabs from
   `shared/chat.ts`, shown **offline**: "Comms is offline in the practice sandbox", no messages, input and Send
   disabled. It imports only `react` and `shared/chat.ts`.
+
+## Season 1 Events hub (2026-09-15)
+
+`src/sandbox/SeasonHub.tsx` over the pure model `src/sandbox/seasonHub.ts`. Opened from the Tactical Operations
+Center, the HUD Events button and the Events tab.
+
+- **Banner:** "Mech Uprising — Iron Dominion" (`SEASON_1_NAME`), practice week N/10 with its chapter name, story
+  beat and featured play, the phase by the live `seasonPhase` rule, and the live Season 1 calendar week and
+  00:00 RST daily/weekly resets (`dailyWindow`, `weeklyWindow`). Art: General Rider (`rider-full.webp`), the
+  Tactical Operations Center, terrain props, the temporary Dominion Walker and Crawler (labelled).
+- **Chapters:** the ten-week strip is the design table in `docs/SEASON-1-LIVE-OPS-DESIGN-v1.md`, copied verbatim
+  (a test checks every row against the doc). No chapter score weights exist in the design, so none are shown.
+  Each week shows how many Assets unlock (`UNLOCK_WEEK`) with their r01 renders, or their category's runway
+  building art where no render exists.
+- **Week:** progress and rewards follow the sandbox's own clock (practice week = `sandboxWeek`), so the test clock
+  can walk through chapters. The live calendar week is shown beside it for reference.
+- **Event cards:**
+  - Daily Operations: lanes done/4 and Cache state from sandbox state; opens Operations.
+  - Daily Exercises: today's targets from the real picker with cleared state and real week rewards; each jumps to
+    its World Map target.
+  - Iron Dominion Arena: **locked, live server event.** Phase, attempts, Field Cache and the live rules
+    (`shared/arena.ts`). Not simulated: the Warden and rankings come from other players.
+  - Dominion Warfront: **locked, alliance event.** An estimate of what today's practice would score under the
+    live point table (`POINTS`, `cappedMetric`, `cappedDayScore`); nothing is submitted. Live rules.
+  - Alliance Convoy: **locked, alliance event.** Truck art and the live rules, minus the Contract Convoy line
+    (its payment rule is unsettled and not a sandbox currency).
 
 ## Where things live
 
@@ -133,6 +159,7 @@ The sandbox has two scenes, like the live game. The current one is in the URL ha
 | `src/sandbox/worldGround.ts` | Live Season 1 terrain painted under the World Map. |
 | `src/sandbox/BasePanels.tsx` | Scene tabs, building-art cards, Repairs, the no-function building sheet. |
 | `src/sandbox/Comms.tsx` | Offline Comms bar and panel. |
+| `src/sandbox/SeasonHub.tsx`, `seasonHub.ts` | Season 1 Events hub and its pure model. |
 
 ## Art: what's real and what's temporary
 

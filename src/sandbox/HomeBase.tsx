@@ -52,6 +52,7 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
 
   return (
     <div ref={scroller} className="absolute inset-0 isolate overflow-y-auto overscroll-contain bg-[#2b2418]" data-scene="base" aria-label="Home Base">
+      <div className="h-14" aria-hidden />
       <div className="relative mx-auto w-full max-w-[560px]" style={{aspectRatio: `${BOARD_W} / ${BOARD_H}`}}>
         <img src={BOARD_IMAGE} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" decoding="async" />
 

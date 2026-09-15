@@ -1,0 +1,56 @@
+/* RefitArt: temporary prototype kit overlays and Workshop fittings (hand-built SVG). */
+
+/* Highlight: a copy of the part drawn behind it as a solid amber silhouette,
+   swollen by a thick stroke, so it reads as a pulsing amber outline. */
+.ra-hl {
+  animation: ra-pulse 1.1s ease-in-out infinite;
+}
+.ra-hl * {
+  fill: #ffb938 !important;
+  stroke: #ffb938 !important;
+  stroke-width: 2.6px !important;
+  stroke-linejoin: round;
+  opacity: 1 !important;
+}
+.ra-hl .ra-nf {
+  fill: none !important;
+}
+.ra-hl .ra-nh {
+  display: none;
+}
+.ra-hl.ra-big * {
+  stroke-width: 10px !important;
+}
+@keyframes ra-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+/* Cyan status lights breathe gently. */
+.ra-blink {
+  animation: ra-blink 2.6s ease-in-out infinite;
+}
+@keyframes ra-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ra-hl,
+  .ra-blink {
+    animation: none;
+  }
+  .ra-hl {
+    opacity: 0.8;
+  }
+}

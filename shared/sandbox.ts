@@ -31,8 +31,9 @@
  *     mock. `confirmedPvpDestructions` is always 0 and nothing in this file
  *     can raise it.
  */
-import {ASSETS, type Asset} from './assets';
+import {ASSETS, type Asset, isMilestone, maxRankForSeason} from './assets';
 import {HP_BASE, HP_PER_ARMOUR, HP_PER_POINT, HP_SCALE} from './combat';
+import {packageStepCost, rankStepCost} from './economy';
 import {EXERCISES, type ExerciseType, exerciseReward, hashSeed, pickDailyTypes, seeded} from './exercises';
 import {marchHpFactor, repairBill} from './repair';
 import {LANES_FOR_CACHE, LANE_COPY, type Lane, type Reward, cacheReward, laneReward} from './season1Ops';
@@ -47,7 +48,7 @@ import {
   type Supplies,
   type SupplyKind,
 } from './sandboxSeason';
-import {NO_PACKAGES, attributesWith} from './upgrades';
+import {NO_PACKAGES, PACKAGE_KEYS, type PackageKey, type Packages, attributesWith, packageCeiling} from './upgrades';
 
 export {SUPPLY_KINDS};
 export type {Supplies, SupplyKind};
@@ -93,6 +94,10 @@ export type AssetStatus = 'ready' | 'disabled' | 'repairing';
 /** A starter Asset in the Task Force. Assets are never destroyed: a disabled one is repaired (the live rule). */
 export interface TaskAsset {
   assetId: string;
+  /** Service Rank, 1 to the Season 1 cap (the live rule, shared/assets.ts). */
+  rank: number;
+  /** The four live packages; none may outrank the asset (shared/upgrades.ts). */
+  packages: Packages;
   hp: number;
   status: AssetStatus;
   job: {startedAt: number; completesAt: number; paid: boolean} | null;
@@ -186,6 +191,15 @@ export interface Install {
   at: number;
 }
 
+/**
+ * A finished upgrade of something that is not a robot: an Asset's Service Rank
+ * or package, or the Field Workshop. Kept for its install ceremony.
+ */
+export type Refit =
+  | {kind: 'asset-rank'; assetId: string; from: number; to: number; at: number}
+  | {kind: 'asset-package'; assetId: string; pkg: PackageKey; from: number; to: number; rank: number; at: number}
+  | {kind: 'workshop'; from: number; to: number; at: number};
+
 export interface SandboxState {
   schema: typeof SANDBOX_SCHEMA;
   config: {id: string; version: number};
@@ -210,6 +224,10 @@ export interface SandboxState {
   lastInstall: Install | null;
   /** `lastInstall.at` of the install whose ceremony was watched or skipped, so a reload does not replay it. */
   seenInstallAt: number | null;
+  /** The most recent Asset or Field Workshop upgrade, for its ceremony. */
+  lastRefit: Refit | null;
+  /** `lastRefit.at` of the refit whose ceremony was watched or skipped. */
+  seenRefitAt: number | null;
   stats: {
     trainingKills: number;
     battlesWon: number;
@@ -234,6 +252,9 @@ export type SandboxAction =
   | {type: 'robot.repair'; role: Role}
   | {type: 'robot.remanufacture'; role: Role}
   | {type: 'asset.repair'; assetId: string}
+  | {type: 'asset.rank'; assetId: string}
+  | {type: 'asset.package'; assetId: string; pkg: PackageKey}
+  | {type: 'refit.seen'}
   | {type: 'workshop.start'}
   | {type: 'ops.cache'}
   | {type: 'clock.advance'; minutes: number}
@@ -327,31 +348,71 @@ export function nextInstall(robot: Robot, config: SandboxSeasonConfig = SANDBOX_
 /* -------------------------------------------------------------------------- */
 
 const ASSET_BY_ID = new Map(ASSETS.map((a) => [a.id, a]));
-/** Assets in the sandbox are at Service Rank 1 with no packages: the starter hangar. */
-export const SANDBOX_ASSET_RANK = 1;
+
+/** What the sandbox needs to know about an Asset to compute its numbers. */
+export interface AssetRef {
+  assetId: string;
+  rank: number;
+  packages: Packages;
+}
+
+/** The Season 1 Service Rank cap (live rule: 10 ranks a season). */
+export const SANDBOX_ASSET_RANK_CAP = maxRankForSeason(1);
 
 export function assetOf(assetId: string): Asset | null {
   return ASSET_BY_ID.get(assetId) ?? null;
 }
 
 /**
- * An Asset's sandbox numbers. HP is the live combat formula (shared/combat.ts)
- * at rank 1 before position and drone modifiers; its volley share is its real
- * firepower attribute times the config's TEST scale.
+ * An Asset's sandbox numbers at its rank and packages. Attributes are the live
+ * `attributesWith`; HP is the live combat formula (shared/combat.ts) before
+ * position and drone modifiers; its volley share is its real firepower
+ * attribute times the config's TEST scale.
  */
-export function assetStats(assetId: string, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST): {maxHp: number; firepower: number; volley: number} {
-  const asset = assetOf(assetId);
-  if (!asset) return {maxHp: 1, firepower: 0, volley: 0};
-  const a = attributesWith(asset, SANDBOX_ASSET_RANK, NO_PACKAGES, 1);
-  return {maxHp: Math.round(HP_SCALE * (HP_BASE + HP_PER_POINT * a.firepower + HP_PER_ARMOUR * a.armour)), firepower: a.firepower, volley: Math.round(a.firepower * config.assetFirepowerScale)};
+export function assetStats(a: AssetRef, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST) {
+  const asset = assetOf(a.assetId);
+  if (!asset) return {maxHp: 1, firepower: 0, volley: 0, attributes: {firepower: 0, armour: 0, mobility: 0, range: 0, detection: 0}};
+  const attributes = attributesWith(asset, a.rank, a.packages, 1);
+  return {
+    maxHp: Math.round(HP_SCALE * (HP_BASE + HP_PER_POINT * attributes.firepower + HP_PER_ARMOUR * attributes.armour)),
+    firepower: attributes.firepower,
+    volley: Math.round(attributes.firepower * config.assetFirepowerScale),
+    attributes,
+  };
 }
 
-/** The live game's repair bill for a damaged Asset (shared/repair.ts), at rank 1. */
+/** A fresh starter Asset: rank 1, no packages, full HP. */
+export function starterAsset(assetId: string, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST): TaskAsset {
+  const ref = {assetId, rank: 1, packages: {...NO_PACKAGES}};
+  return {...ref, hp: assetStats(ref, config).maxHp, status: 'ready', job: null, sorties: 0};
+}
+
+/** The live game's repair bill for a damaged Asset (shared/repair.ts), at its rank and packages. */
 export function assetRepairQuote(a: TaskAsset, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST): {cost: Supplies; minutes: number} {
   const asset = assetOf(a.assetId);
   if (!asset) return {cost: {fuel: 0, steel: 0, munitions: 0, alloy: 0}, minutes: 0};
-  const bill = repairBill(asset, SANDBOX_ASSET_RANK, NO_PACKAGES, 1, a.hp / assetStats(a.assetId, config).maxHp);
+  const bill = repairBill(asset, a.rank, a.packages, 1, a.hp / assetStats(a, config).maxHp);
   return {cost: {fuel: bill.fuel, steel: bill.steel, munitions: bill.munitions, alloy: bill.alloy}, minutes: bill.ms / MIN};
+}
+
+/**
+ * The next Service Rank for an Asset: the live price (shared/economy.ts,
+ * provisional there too), paid in the sandbox in TEST Credits, and the real
+ * attribute change. Live rank upgrades are instant, so these are too.
+ */
+export function nextAssetRank(a: TaskAsset, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST) {
+  if (a.rank >= SANDBOX_ASSET_RANK_CAP) return null;
+  const to = a.rank + 1;
+  return {to, credits: rankStepCost(a.rank), milestone: isMilestone(to), before: assetStats(a, config), after: assetStats({...a, rank: to}, config)};
+}
+
+/** The next rank of one package: live price in test Credits, capped by the Asset's Service Rank (live rule). */
+export function nextAssetPackage(a: TaskAsset, pkg: PackageKey, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST) {
+  const from = a.packages[pkg];
+  const ceiling = packageCeiling(a.rank);
+  if (from >= ceiling) return {to: null, ceiling, credits: 0, before: assetStats(a, config), after: assetStats(a, config)};
+  const packages = {...a.packages, [pkg]: from + 1};
+  return {to: from + 1, ceiling, credits: packageStepCost(from), before: assetStats(a, config), after: assetStats({...a, packages}, config)};
 }
 
 export const isDrone = (assetId: string) => assetOf(assetId)?.category === 'drone';
@@ -499,7 +560,7 @@ export function forceTotals(s: SandboxState, robots: Role[], assets: string[], c
     const a = s.assets.find((x) => x.assetId === id);
     if (!a) continue;
     hp += Math.max(0, a.hp);
-    firepower += assetStats(id, config).volley;
+    firepower += assetStats(a, config).volley;
   }
   return {hp, firepower};
 }
@@ -606,7 +667,7 @@ export function createSandbox(now: number, config: SandboxSeasonConfig = SANDBOX
     tutorial: {step: 0, completed: false},
     company: {name: '1st Iron Task Force', xp: 0},
     robots: {scout: newRobot('scout', 1, config), assault: newRobot('assault', 2, config), support: newRobot('support', 3, config)},
-    assets: config.taskForceAssets.map((assetId) => ({assetId, hp: assetStats(assetId, config).maxHp, status: 'ready', job: null, sorties: 0})),
+    assets: config.taskForceAssets.map((assetId) => starterAsset(assetId, config)),
     nextSerial: 4,
     supplies: {...config.startSupplies},
     credits: config.startCredits,
@@ -618,6 +679,8 @@ export function createSandbox(now: number, config: SandboxSeasonConfig = SANDBOX
     cleared: [],
     lastInstall: null,
     seenInstallAt: null,
+    lastRefit: null,
+    seenRefitAt: null,
     stats: {trainingKills: 0, battlesWon: 0, battlesLost: 0, patrolWins: 0, exercisesDone: 0, robotsDestroyed: 0, confirmedPvpDestructions: 0},
     ledger: [],
     applied: [],
@@ -664,12 +727,18 @@ export function readSandbox(raw: unknown, config: SandboxSeasonConfig = SANDBOX_
   for (const a of s.assets) {
     if (!isObj(a) || typeof a.assetId !== 'string' || !isNum(a.hp) || a.hp < 0 || !ASSET_STATUSES.includes(a.status) || !isNum(a.sorties)) return no('invalid');
     if (a.job !== null && !(isObj(a.job) && isNum(a.job.completesAt) && isNum(a.job.startedAt))) return no('invalid');
+    // Saves from before Asset upgrades have no rank or packages: they start at rank 1, nothing fitted.
+    if (a.rank !== undefined && (!Number.isInteger(a.rank) || a.rank < 1)) return no('invalid');
+    if (a.packages !== undefined && !(isObj(a.packages) && PACKAGE_KEYS.every((k) => Number.isInteger(a.packages[k]) && a.packages[k] >= 1))) return no('invalid');
   }
   // The Task Force's Assets follow the config; one it no longer lists is dropped, a new one joins fresh.
   const assets: TaskAsset[] = config.taskForceAssets.map((assetId) => {
     const kept = s.assets.find((a) => a.assetId === assetId);
-    const max = assetStats(assetId, config).maxHp;
-    return kept ? {...kept, hp: Math.min(kept.hp, max)} : {assetId, hp: max, status: 'ready', job: null, sorties: 0};
+    if (!kept) return starterAsset(assetId, config);
+    const rank = Math.min(kept.rank ?? 1, SANDBOX_ASSET_RANK_CAP);
+    const packages = Object.fromEntries(PACKAGE_KEYS.map((k) => [k, Math.min(kept.packages?.[k] ?? 1, packageCeiling(rank))])) as Packages;
+    const ref = {assetId, rank, packages};
+    return {...kept, ...ref, hp: Math.min(kept.hp, assetStats(ref, config).maxHp)};
   });
   if (!isObj(s.supplies) || !SUPPLY_KINDS.every((k) => isNum(s.supplies[k]) && s.supplies[k] >= 0) || !isNum(s.credits) || s.credits < 0) return no('invalid');
   if (!isObj(s.workshop) || !Number.isInteger(s.workshop.level) || (s.workshop.job !== null && !(isObj(s.workshop.job) && isNum(s.workshop.job.completesAt) && Number.isInteger(s.workshop.job.toLevel)))) return no('invalid');
@@ -682,7 +751,11 @@ export function readSandbox(raw: unknown, config: SandboxSeasonConfig = SANDBOX_
   if (e !== null && (!isObj(e) || typeof e.id !== 'string' || !Array.isArray(e.enemies) || !Array.isArray(e.enemiesStart) || !Array.isArray(e.rounds) || !['won', 'lost'].includes(e.status) || !isNum(e.startsAt) || !isNum(e.endsAt) || !isObj(e.before) || !isObj(e.after) || typeof e.applied !== 'boolean' || typeof e.seen !== 'boolean')) return no('invalid');
   if (s.lastInstall !== null && !(isObj(s.lastInstall) && isNum(s.lastInstall.at) && (ROLES as readonly string[]).includes(s.lastInstall.role))) return no('invalid');
   if (!nullOrNum(s.seenInstallAt)) return no('invalid');
-  return {state: {...s, robots, assets, config: {id: config.id, version: config.version}}, rejected: null};
+  const lastRefit = (s as {lastRefit?: unknown}).lastRefit ?? null;
+  const seenRefitAt = (s as {seenRefitAt?: unknown}).seenRefitAt ?? null;
+  if (lastRefit !== null && !(isObj(lastRefit) && ['asset-rank', 'asset-package', 'workshop'].includes(lastRefit.kind as string) && isNum(lastRefit.at) && isNum(lastRefit.from) && isNum(lastRefit.to))) return no('invalid');
+  if (!nullOrNum(seenRefitAt)) return no('invalid');
+  return {state: {...s, robots, assets, lastRefit: lastRefit as Refit | null, seenRefitAt: seenRefitAt as number | null, config: {id: config.id, version: config.version}}, rejected: null};
 }
 
 /** A stored sandbox this build can trust, or null. */
@@ -780,7 +853,7 @@ export function robotNeedsRepair(robot: Robot, config: SandboxSeasonConfig = SAN
   return robot.status === 'disabled' || (robot.status === 'ready' && robot.hp < robotStats(robot.role, robot.level, config).maxHp);
 }
 export function assetNeedsRepair(a: TaskAsset, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST): boolean {
-  return a.status === 'disabled' || (a.status === 'ready' && a.hp < assetStats(a.assetId, config).maxHp);
+  return a.status === 'disabled' || (a.status === 'ready' && a.hp < assetStats(a, config).maxHp);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -849,6 +922,7 @@ export function resolveBattle(s: SandboxState, m: March, site: Site, config: San
   const killed = new Set<string>();
   let status: 'active' | 'won' | 'lost' = 'active';
 
+  const assetSpec = (id: string) => assetStats(s.assets.find((x) => x.assetId === id)!, config);
   const readyRobots = () => m.robots.filter((r) => robotHp[r]!.status === 'ready' && robotHp[r]!.hp > 0);
   const readyAssets = () => m.assets.filter((id) => assetHp[id].status === 'ready' && assetHp[id].hp > 0);
   const alive = () => enemies.filter((x) => x.hp > 0);
@@ -860,7 +934,7 @@ export function resolveBattle(s: SandboxState, m: March, site: Site, config: San
       const heal = robotStats('support', level('support'), config).heal;
       const hurt = [
         ...readyRobots().map((r) => ({ref: {kind: 'robot', role: r} as UnitRef, share: robotHp[r]!.hp / robotStats(r, level(r), config).maxHp})),
-        ...readyAssets().map((id) => ({ref: {kind: 'asset', assetId: id} as UnitRef, share: assetHp[id].hp / assetStats(id, config).maxHp})),
+        ...readyAssets().map((id) => ({ref: {kind: 'asset', assetId: id} as UnitRef, share: assetHp[id].hp / assetSpec(id).maxHp})),
       ]
         .filter((x) => x.share < 1)
         .sort((a, b) => a.share - b.share);
@@ -871,7 +945,7 @@ export function resolveBattle(s: SandboxState, m: March, site: Site, config: San
           ev.push({t: 'heal', to: target, amount: hp - robotHp[target.role]!.hp, hpAfter: hp});
           robotHp[target.role] = {...robotHp[target.role]!, hp};
         } else {
-          const hp = Math.min(assetStats(target.assetId, config).maxHp, assetHp[target.assetId].hp + heal);
+          const hp = Math.min(assetSpec(target.assetId).maxHp, assetHp[target.assetId].hp + heal);
           ev.push({t: 'heal', to: target, amount: hp - assetHp[target.assetId].hp, hpAfter: hp});
           assetHp[target.assetId] = {...assetHp[target.assetId], hp};
         }
@@ -880,7 +954,7 @@ export function resolveBattle(s: SandboxState, m: March, site: Site, config: San
     // 2. The volley: every robot troop and Asset still fighting.
     const shooters: UnitRef[] = [...readyRobots().map((role): UnitRef => ({kind: 'robot', role})), ...readyAssets().map((assetId): UnitRef => ({kind: 'asset', assetId}))];
     const marked = readyRobots().includes('scout');
-    const raw = readyRobots().reduce((sum, r) => sum + robotStats(r, level(r), config).damage, 0) + readyAssets().reduce((sum, id) => sum + assetStats(id, config).volley, 0);
+    const raw = readyRobots().reduce((sum, r) => sum + robotStats(r, level(r), config).damage, 0) + readyAssets().reduce((sum, id) => sum + assetSpec(id).volley, 0);
     let volley = Math.round(raw * veteran * (marked ? 1 + SCOUT_MARK_BONUS : 1));
     const order = marked ? [...alive()].sort((a, b) => a.hp - b.hp) : alive();
     if (marked && order[0]) ev.push({t: 'mark', target: order[0].id});
@@ -903,7 +977,7 @@ export function resolveBattle(s: SandboxState, m: March, site: Site, config: San
         if (robotsUp.length === 0) break;
         const to: UnitRef =
           enemy.kind === 'walker' && assetsUp.length
-            ? {kind: 'asset', assetId: [...assetsUp].sort((a, b) => assetStats(b, config).maxHp - assetStats(a, config).maxHp)[0]}
+            ? {kind: 'asset', assetId: [...assetsUp].sort((a, b) => assetSpec(b).maxHp - assetSpec(a).maxHp)[0]}
             : {kind: 'robot', role: [...robotsUp].sort((a, b) => robotStats(a, level(a), config).maxHp - robotStats(b, level(b), config).maxHp)[0]};
         const dmg = Math.round(ENEMY_SPEC[enemy.kind].damage * (1 + WAVE_GROWTH * (strength - 1)) * armour);
         if (to.kind === 'robot') {
@@ -1015,7 +1089,11 @@ export function settle(state: SandboxState, now: number, config: SandboxSeasonCo
   let s = state;
 
   const job = s.workshop.job;
-  if (job && job.completesAt <= now) s = {...s, workshop: {level: Math.max(s.workshop.level, job.toLevel), job: null}};
+  if (job && job.completesAt <= now) {
+    const from = s.workshop.level;
+    const to = Math.max(from, job.toLevel);
+    s = {...s, workshop: {level: to, job: null}, lastRefit: to > from ? {kind: 'workshop', from, to, at: refitAt(s, job.completesAt)} : s.lastRefit};
+  }
 
   for (const role of ROLES) {
     const r = s.robots[role];
@@ -1034,7 +1112,7 @@ export function settle(state: SandboxState, now: number, config: SandboxSeasonCo
     }
   }
   if (s.assets.some((a) => a.job && a.job.completesAt <= now)) {
-    s = {...s, assets: s.assets.map((a) => (a.job && a.job.completesAt <= now ? {...a, hp: assetStats(a.assetId, config).maxHp, status: 'ready', job: null} : a))};
+    s = {...s, assets: s.assets.map((a) => (a.job && a.job.completesAt <= now ? {...a, hp: assetStats(a, config).maxHp, status: 'ready', job: null} : a))};
   }
 
   const m = s.march;
@@ -1054,7 +1132,7 @@ export function settle(state: SandboxState, now: number, config: SandboxSeasonCo
     if (m2.phase === 'engaged' && m2.holdUntil !== null && m2.holdUntil <= now && s.encounter && s.encounter.marchId === m2.id) {
       s = applyBattle(s, s.encounter, config);
       // Damaged Assets set the pace home (the live march rule, shared/repair.ts).
-      const worst = Math.min(1, ...m2.assets.map((id) => (s.assets.find((a) => a.assetId === id)?.hp ?? 0) / assetStats(id, config).maxHp));
+      const worst = Math.min(1, ...m2.assets.map((id) => ((a) => (a ? a.hp / assetStats(a, config).maxHp : 0))(s.assets.find((x) => x.assetId === id))));
       const travel = Math.round((m2.arriveAt - m2.departAt) / marchHpFactor(worst));
       s = {...s, march: {...m2, phase: 'returning', returnAt: m2.holdUntil + travel, outcome: s.encounter!.status}};
     }
@@ -1103,6 +1181,9 @@ export function applyAction(state: SandboxState, actionId: string, action: Sandb
   if (!result.ok) return {...result, state: settled};
   return {...result, state: {...result.state, applied: [...result.state.applied, actionId].slice(-APPLIED_KEEP)}};
 }
+
+/** A refit's instant, kept unique so two refits in the same millisecond each get their ceremony. */
+const refitAt = (s: SandboxState, at: number) => (s.lastRefit && s.lastRefit.at >= at ? s.lastRefit.at + 1 : at);
 
 const robotOut = (s: SandboxState, role: Role) => !!s.march && s.march.robots.includes(role);
 const assetOut = (s: SandboxState, id: string) => !!s.march && s.march.assets.includes(id);
@@ -1264,6 +1345,44 @@ function reduce(s: SandboxState, action: SandboxAction, now: number, config: San
       const next: SandboxState = paid ? lane(charged, 'readiness', now, config) : {...charged};
       next.assets = next.assets.map((x) => (x.assetId === a.assetId ? {...x, status: 'repairing', job: {startedAt: now, completesAt: now + Math.round(minutes * MIN), paid}} : x));
       return done(tutorialOn(next, 'recover', now, config), paid ? null : 'Not enough supplies: field crews repair it for free, slower.');
+    }
+
+    case 'asset.rank':
+    case 'asset.package': {
+      const a = s.assets.find((x) => x.assetId === action.assetId);
+      const name = assetOf(action.assetId)?.name ?? action.assetId;
+      if (!a) return fail('No such Asset.');
+      if (assetOut(s, a.assetId)) return fail(`${name} is out with the Task Force. Upgrades happen in the Hangar.`);
+      if (action.type === 'asset.rank') {
+        const q = nextAssetRank(a, config);
+        if (!q) return fail(`${name} is at the Season 1 Service Rank cap, ${SANDBOX_ASSET_RANK_CAP}.`);
+        if (s.credits < q.credits) return fail(`Need ${q.credits - s.credits} more test Credits.`);
+        const maxGain = q.after.maxHp - q.before.maxHp;
+        const next: SandboxState = {
+          ...s,
+          credits: s.credits - q.credits,
+          assets: s.assets.map((x) => (x.assetId === a.assetId ? {...x, rank: q.to, hp: x.status === 'disabled' ? x.hp : Math.min(q.after.maxHp, x.hp + maxGain)} : x)),
+          lastRefit: {kind: 'asset-rank', assetId: a.assetId, from: a.rank, to: q.to, at: refitAt(s, now)},
+        };
+        return done(lane(next, 'readiness', now, config), `${name}: Service Rank ${q.to}.`);
+      }
+      if (!(PACKAGE_KEYS as readonly string[]).includes(action.pkg)) return fail('No such package.');
+      const q = nextAssetPackage(a, action.pkg, config);
+      if (q.to === null) return fail(`A package can never outrank its Asset: raise ${name}'s Service Rank first.`);
+      if (s.credits < q.credits) return fail(`Need ${q.credits - s.credits} more test Credits.`);
+      const maxGain = q.after.maxHp - q.before.maxHp;
+      const next: SandboxState = {
+        ...s,
+        credits: s.credits - q.credits,
+        assets: s.assets.map((x) => (x.assetId === a.assetId ? {...x, packages: {...x.packages, [action.pkg]: q.to!}, hp: x.status === 'disabled' ? x.hp : Math.min(q.after.maxHp, x.hp + maxGain)} : x)),
+        lastRefit: {kind: 'asset-package', assetId: a.assetId, pkg: action.pkg, from: a.packages[action.pkg], to: q.to, rank: a.rank, at: refitAt(s, now)},
+      };
+      return done(lane(next, 'readiness', now, config), null);
+    }
+
+    case 'refit.seen': {
+      if (!s.lastRefit || s.seenRefitAt === s.lastRefit.at) return done(s);
+      return done({...s, seenRefitAt: s.lastRefit.at});
     }
 
     case 'workshop.start': {

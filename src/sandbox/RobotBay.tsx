@@ -24,6 +24,7 @@ import {
   workshopRepairFactor,
 } from '../../shared/sandbox';
 import {PART_SLOTS, SANDBOX_SEASON_1_TEST} from '../../shared/sandboxSeason';
+import {WORKSHOP_VIEWBOX, WorkshopFittingsGroup} from './RefitArt';
 import {RobotFigure} from './RobotFigure';
 import {Bar, CostLine, Section, TempArtTag, clock, minutesLabel, primary, secondary, testButton} from './ui';
 
@@ -201,6 +202,12 @@ export default function RobotBay({state, now, busy, initialRole, onAct, onTestAd
       </section>
 
       <Section title="Field Workshop" right={<span className="text-[13px] text-neutral-400">Level {state.workshop.level}/{WORKSHOP_MAX_LEVEL}</span>}>
+        <div className="relative mx-auto mb-2 w-full max-w-[300px]" style={{aspectRatio: `${WORKSHOP_VIEWBOX.width} / ${WORKSHOP_VIEWBOX.height}`}}>
+          <img src="/base/building-fabrication-shop.webp" alt={`Field Workshop, level ${state.workshop.level}`} className="absolute inset-0 h-full w-full" />
+          <svg viewBox={`0 0 ${WORKSHOP_VIEWBOX.width} ${WORKSHOP_VIEWBOX.height}`} className="absolute inset-0 h-full w-full" aria-hidden="true">
+            <WorkshopFittingsGroup level={state.workshop.level} />
+          </svg>
+        </div>
         <p className="text-[13px] text-neutral-300">
           Damage taken x{workshopArmour(state.workshop.level).toFixed(2)} · Robot repair time x{workshopRepairFactor(state.workshop.level).toFixed(2)}
         </p>

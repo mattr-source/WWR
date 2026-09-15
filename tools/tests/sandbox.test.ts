@@ -13,6 +13,7 @@ import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {dirname, join, normalize, relative} from 'node:path';
 import test from 'node:test';
 import {cacheReward, laneReward} from '../../shared/season1Ops';
+import {packageStepCost, rankStepCost} from '../../shared/economy';
 import {exerciseReward} from '../../shared/exercises';
 import {
   type Role,
@@ -21,6 +22,10 @@ import {
   assetRepairQuote,
   assetStats,
   battleCasualties,
+  nextAssetPackage,
+  nextAssetRank,
+  SANDBOX_ASSET_RANK_CAP,
+  starterAsset,
   robotNeedsRepair,
   SANDBOX_SCHEMA,
   type SandboxAction,
@@ -229,7 +234,7 @@ test('Assets use the live HP formula and repair bill, are never destroyed, and d
   const s0 = createSandbox(T0);
   assert.deepEqual(s0.assets.map((a) => a.assetId), ALL_ASSETS);
   // HP_SCALE x (HP_BASE + 0.3 x firepower + 0.4 x armour) at rank 1: Abrams F9 A10.
-  assert.equal(assetStats('m1a2').maxHp, Math.round(8 * (3 + 0.3 * 9 + 0.4 * 10)));
+  assert.equal(assetStats(starterAsset('m1a2')).maxHp, Math.round(8 * (3 + 0.3 * 9 + 0.4 * 10)));
   const p = skipped();
   let s = p.state();
   const hurt: SandboxState = {...s, assets: s.assets.map((a) => (a.assetId === 'm1a2' ? {...a, hp: 20} : a))};
@@ -241,7 +246,7 @@ test('Assets use the live HP formula and repair bill, are never destroyed, and d
   assert.equal(s.supplies.fuel, hurt.supplies.fuel - q.cost.fuel);
   assert.equal(p.run({type: 'march.start', siteId: patrolSite(p).id, robots: ['assault'], assets: ['m1a2', 'rq4']}).ok, false, 'an Asset under repair does not march');
   p.wait(q.minutes * MIN + 1);
-  assert.equal(p.state().assets[0].hp, assetStats('m1a2').maxHp);
+  assert.equal(p.state().assets[0].hp, assetStats(p.state().assets[0]).maxHp);
 
   // A long campaign: Assets go down but never become "destroyed"; a battered column comes home slower.
   const c = skipped();
@@ -330,6 +335,99 @@ test('every robot level installs exactly one part and really improves the robot,
     assert.equal(nextInstall({...createSandbox(T0).robots[role], level: CONFIG.robotMaxLevel}), null);
     assert.equal('power' in robotStats(role, 10), false, 'no invented summary power figure');
   }
+});
+
+test('Asset Service Rank: live attributes and live step price in test Credits, instant, capped at the Season 1 cap', () => {
+  for (const id of CONFIG.taskForceAssets) {
+    const p = skipped();
+    p.ok({type: 'test.supplies'});
+    p.ok({type: 'test.supplies'});
+    for (let rank = 1; rank < SANDBOX_ASSET_RANK_CAP; rank += 1) {
+      const before = p.state();
+      const a = before.assets.find((x) => x.assetId === id)!;
+      assert.equal(a.rank, rank);
+      const q = nextAssetRank(a)!;
+      assert.equal(q.credits, rankStepCost(rank), 'the live provisional price');
+      const keys = ['firepower', 'armour', 'mobility', 'range', 'detection'] as const;
+      assert.ok(keys.some((k) => q.after.attributes[k] > q.before.attributes[k]), `${id} ${rank}->${rank + 1} raises a real attribute`);
+      assert.ok(keys.every((k) => q.after.attributes[k] >= q.before.attributes[k]));
+      const s = p.ok({type: 'asset.rank', assetId: id});
+      const after = s.assets.find((x) => x.assetId === id)!;
+      assert.equal(after.rank, rank + 1);
+      assert.equal(s.credits, before.credits - q.credits + (lanesDone(before, 0).includes('readiness') ? 0 : laneReward('readiness', 1).credits));
+      assert.equal(after.hp, Math.min(q.after.maxHp, a.hp + q.after.maxHp - q.before.maxHp), 'new HP is added, damage carried stays');
+      assert.deepEqual(s.lastRefit && {kind: s.lastRefit.kind, from: s.lastRefit.from, to: s.lastRefit.to}, {kind: 'asset-rank', from: rank, to: rank + 1});
+      assert.notEqual(s.seenRefitAt, s.lastRefit!.at);
+      assert.equal(p.ok({type: 'refit.seen'}).seenRefitAt, s.lastRefit!.at);
+    }
+    assert.equal(nextAssetRank(p.state().assets.find((x) => x.assetId === id)!), null);
+    assert.equal(p.run({type: 'asset.rank', assetId: id}).ok, false, 'Season 1 cap');
+  }
+});
+
+test('Asset packages: never above Service Rank, live price, the mapped attribute rises, and battles use it', () => {
+  const p = skipped();
+  p.ok({type: 'test.supplies'});
+  assert.equal(p.run({type: 'asset.package', assetId: 'm1a2', pkg: 'armament'}).ok, false, 'rank 1: no package can be raised');
+  p.ok({type: 'asset.rank', assetId: 'm1a2'});
+  p.ok({type: 'asset.rank', assetId: 'm1a2'});
+  let a = p.state().assets.find((x) => x.assetId === 'm1a2')!;
+  const q = nextAssetPackage(a, 'armament');
+  assert.equal(q.to, 2);
+  assert.equal(q.credits, packageStepCost(1));
+  assert.ok(q.after.attributes.firepower > q.before.attributes.firepower);
+  assert.equal(q.after.attributes.armour, q.before.attributes.armour, 'Armament lifts firepower only');
+  const before = p.state().credits;
+  let s = p.ok({type: 'asset.package', assetId: 'm1a2', pkg: 'armament'});
+  assert.equal(s.credits, before - q.credits);
+  assert.equal(s.lastRefit?.kind, 'asset-package');
+  p.ok({type: 'asset.package', assetId: 'm1a2', pkg: 'armament'});
+  assert.equal(p.run({type: 'asset.package', assetId: 'm1a2', pkg: 'armament'}).ok, false, 'package 3 on a rank 3 Asset is the ceiling');
+  a = p.state().assets.find((x) => x.assetId === 'm1a2')!;
+  assert.equal(a.packages.armament, 3);
+  // The fight uses the upgraded numbers: the volley includes the Abrams' higher firepower.
+  marchTo(p, patrolSite(p).id, [...ROLES], ALL_ASSETS);
+  const e = p.state().encounter!;
+  const volley = e.rounds[0].find((ev) => ev.t === 'volley');
+  const base = skipped();
+  marchTo(base, patrolSite(base).id, [...ROLES], ALL_ASSETS);
+  const baseVolley = base.state().encounter!.rounds[0].find((ev) => ev.t === 'volley');
+  assert.ok(volley && baseVolley && volley.t === 'volley' && baseVolley.t === 'volley' && volley.total > baseVolley.total);
+  // An upgraded Asset out on the march can't be refitted.
+  assert.equal(p.run({type: 'asset.rank', assetId: 'm1a2'}).ok, false);
+});
+
+test('Field Workshop level-ups record a refit for their ceremony; refits in the same instant each get one', () => {
+  const p = skipped();
+  p.ok({type: 'test.supplies'});
+  const s0 = p.ok({type: 'workshop.start'});
+  p.wait(s0.workshop.job!.completesAt - p.simNow() + 1);
+  let s = p.state();
+  assert.deepEqual(s.lastRefit && {kind: s.lastRefit.kind, from: s.lastRefit.from, to: s.lastRefit.to}, {kind: 'workshop', from: 1, to: 2});
+  assert.equal(p.ok({type: 'refit.seen'}).seenRefitAt, s.lastRefit!.at);
+  // Two upgrades inside one millisecond still differ.
+  let st = createSandbox(T0);
+  st = {...st, credits: 10_000, tutorial: {step: TUTORIAL.length - 1, completed: true}};
+  st = applyAction(st, 'r1', {type: 'asset.rank', assetId: 'rq4'}, T0).state;
+  const first = st.lastRefit!.at;
+  st = applyAction(st, 'r2', {type: 'asset.rank', assetId: 'mi35m'}, T0).state;
+  assert.notEqual(st.lastRefit!.at, first);
+});
+
+test('a save from before Asset upgrades keeps its progress, at rank 1 with nothing fitted', () => {
+  const p = skipped();
+  p.ok({type: 'test.supplies'});
+  const s = p.state();
+  const legacy = JSON.parse(JSON.stringify({...s, assets: s.assets.map(({rank: _r, packages: _p, ...rest}) => rest)}));
+  delete legacy.lastRefit;
+  delete legacy.seenRefitAt;
+  const read = readSandbox(legacy);
+  assert.equal(read.rejected, null);
+  assert.ok(read.state!.assets.every((a) => a.rank === 1 && a.packages.armament === 1));
+  assert.equal(read.state!.supplies.fuel, s.supplies.fuel);
+  // Packages above the ceiling in a hand-edited save are held at the rank.
+  const edited = readSandbox({...s, assets: s.assets.map((a) => ({...a, rank: 2, packages: {armament: 9, protection: 1, propulsion: 1, electronics: 1}}))});
+  assert.ok(edited.state!.assets.every((a) => a.packages.armament === 2));
 });
 
 test('a destroyed robot is remanufactured with a new serial and keeps its level and parts', () => {
@@ -589,10 +687,10 @@ test('isolation: one storage key, a strict import allow-list, and no path to the
 
   const root = join(import.meta.dirname, '..', '..');
   const ALLOWED: Record<string, readonly string[]> = {
-    'shared/sandbox.ts': ['./assets', './combat', './exercises', './repair', './season1Ops', './sandboxSeason', './upgrades'],
+    'shared/sandbox.ts': ['./assets', './combat', './economy', './exercises', './repair', './season1Ops', './sandboxSeason', './upgrades'],
     'shared/sandboxSeason.ts': ['./assets', './exercises', './season', './season1Ops'],
   };
-  const SANDBOX_UI = ['react', '../../shared/sandbox', '../../shared/sandboxSeason', '../../shared/exercises', '../../shared/season1Ops', '../../shared/assetVisuals', '../../shared/terrainAtlas', '../../shared/allianceConvoyVisuals', './store', './flag', './beats', './Battlefield', './SectorMap', './RobotFigure', './RobotBay', './InstallCeremony', './ui', './sandbox.css', './robotFigure.css'];
+  const SANDBOX_UI = ['react', '../../shared/sandbox', '../../shared/sandboxSeason', '../../shared/upgrades', '../../shared/assets', '../../shared/exercises', '../../shared/season1Ops', '../../shared/assetVisuals', '../../shared/terrainAtlas', '../../shared/allianceConvoyVisuals', './store', './flag', './beats', './Battlefield', './SectorMap', './RobotFigure', './RobotBay', './InstallCeremony', './RefitArt', './RefitCeremony', './refitArt.css', './ui', './sandbox.css', './robotFigure.css'];
   const files = ['shared/sandbox.ts', 'shared/sandboxSeason.ts', ...readdirSync(join(root, 'src/sandbox')).filter((f) => /\.tsx?$/.test(f)).map((f) => `src/sandbox/${f}`)];
   for (const file of files) {
     const src = readFileSync(join(root, file), 'utf8');
@@ -606,7 +704,13 @@ test('isolation: one storage key, a strict import allow-list, and no path to the
     assert.doesNotMatch(rel, /^(src\/live|src\/net|worker)\//, `sandbox reaches ${rel}`);
     const src = readFileSync(join(root, file), 'utf8');
     assert.doesNotMatch(src, /\bfetch\s*\(|['"`]\/api\/|XMLHttpRequest|WebSocket|sendBeacon|localStorage\.setItem\((?!SANDBOX)/, rel);
-    assert.doesNotMatch(src, /from '[^']*(wallet|economy|payments?)'/, `${rel} imports a wallet/payment module`);
+    // The one exception: the engine reads the live provisional step PRICES, and nothing else, from economy.ts.
+    for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*'([^']*economy)'/g)) {
+      assert.equal(rel, 'shared/sandbox.ts', `${rel} imports economy`);
+      assert.deepEqual(m[1].split(',').map((x) => x.trim()).filter(Boolean).sort(), ['packageStepCost', 'rankStepCost'], 'only the two step-price functions');
+    }
+    assert.doesNotMatch(src, /from '[^']*(wallet|payments?)'/, `${rel} imports a wallet/payment module`);
+    if (rel !== 'shared/sandbox.ts') assert.doesNotMatch(src, /from '[^']*economy'/, `${rel} imports economy`);
   }
   // And nothing in the live game or the Worker reads sandbox state.
   for (const dir of ['worker', 'src/live', 'src/net']) {

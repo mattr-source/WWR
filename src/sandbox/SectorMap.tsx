@@ -23,7 +23,8 @@ import {
   type Role,
   type SandboxState,
   type Site,
-  SANDBOX_ASSET_RANK,
+  type TaskAsset,
+  assetOf,
   type UnitRef,
   assetStats,
   findSite,
@@ -37,6 +38,7 @@ import {
 import {PROP_ATLAS_H, PROP_ATLAS_SRC, PROP_ATLAS_W, PROP_FRAMES} from '../../shared/terrainAtlas';
 import {type BattleFrame, type Fx, type FxRef, battleFrame} from './beats';
 import {DominionFigureGroup, FIGURE_VIEWBOX, DOMINION_VIEWBOX, RobotFigureGroup} from './RobotFigure';
+import {AssetKitGroup, KIT_VIEWBOX, WORKSHOP_VIEWBOX, WorkshopFittingsGroup} from './RefitArt';
 
 export const VIEW_W = 360;
 export const VIEW_H = 600;
@@ -141,11 +143,17 @@ const Ground = memo(function Ground() {
 /* -------------------------------------------------------------------------- */
 
 const Base = memo(function Base({workshopLevel, busy}: {workshopLevel: number; busy: boolean}) {
+  const sx = 132 / WORKSHOP_VIEWBOX.width;
+  const sy = 85 / WORKSHOP_VIEWBOX.height;
   return (
     <g aria-hidden="true">
       <ellipse cx={BASE_AT.x} cy={560} rx={170} ry={46} fill="#8f8163" opacity="0.35" />
       {/* Matt's base building art (shared/base.ts). */}
       <image href="/base/building-fabrication-shop.webp" x={52} y={496} width={132} height={85} />
+      {/* Every Workshop level-up leaves its fitting on the building (temporary prototype art). */}
+      <g transform={`translate(52 496) scale(${sx} ${sy})`}>
+        <WorkshopFittingsGroup level={workshopLevel} />
+      </g>
       <image href="/base/building-recovery-yard.webp" x={190} y={500} width={124} height={80} />
       {busy && (
         <g className="sbx-weld">
@@ -205,8 +213,9 @@ function Damage({share, x, y, heavy}: {share: number; x: number; y: number; heav
   );
 }
 
-function AssetSprite({assetId, x, y, share, disabled, mirror, motion}: {assetId: string; x: number; y: number; share: number; disabled: boolean; mirror: boolean; motion?: ReactNode}) {
-  const url = assetArtUrl(assetId, SANDBOX_ASSET_RANK);
+function AssetSprite({held, x, y, share, disabled, mirror, motion}: {held: TaskAsset; x: number; y: number; share: number; disabled: boolean; mirror: boolean; motion?: ReactNode}) {
+  const url = assetArtUrl(held.assetId, held.rank);
+  const category = assetOf(held.assetId)?.category;
   const s = ASSET_SIZE;
   return (
     <g transform={`translate(${x} ${y})`}>
@@ -214,6 +223,12 @@ function AssetSprite({assetId, x, y, share, disabled, mirror, motion}: {assetId:
       <g transform={mirror ? 'scale(-1 1)' : undefined}>
         {motion}
         {url && <image href={url} x={-s / 2} y={-s * 0.9} width={s} height={s} filter={disabled ? 'url(#sm-dim)' : share < 0.5 ? 'url(#sm-scorch)' : undefined} />}
+        {/* The fitted kit stays on the Asset out on the map too (temporary prototype art). */}
+        {category && (
+          <g data-kit="1" transform={`translate(${-s / 2} ${-s * 0.9}) scale(${s / KIT_VIEWBOX})`}>
+            <AssetKitGroup category={category} packages={held.packages} rank={held.rank} />
+          </g>
+        )}
       </g>
       <Damage share={share} x={4} y={-s * 0.45} heavy={disabled} />
     </g>
@@ -431,10 +446,10 @@ function HomeCluster({state, robots, assets}: {state: SandboxState; robots: Role
     <g pointerEvents="none">
       {f.assets.map(({assetId, at}) => {
         const a = state.assets.find((x) => x.assetId === assetId)!;
-        const share = a.hp / assetStats(assetId).maxHp;
+        const share = a.hp / assetStats(a).maxHp;
         return (
           <g key={assetId}>
-            <AssetSprite assetId={assetId} x={at.x} y={at.y} share={a.status === 'repairing' ? 1 : share} disabled={a.status === 'disabled'} mirror={false} />
+            <AssetSprite held={a} x={at.x} y={at.y} share={a.status === 'repairing' ? 1 : share} disabled={a.status === 'disabled'} mirror={false} />
             {a.status === 'repairing' && <Chip x={at.x} y={at.y + 2} text="REPAIRING" tone="#9ae6b4" />}
           </g>
         );
@@ -498,10 +513,10 @@ function Column({state, now, site, frame}: {state: SandboxState; now: number; si
         const a = state.assets.find((x) => x.assetId === assetId)!;
         const hp = live?.hp ?? a.hp;
         const status = live?.status ?? a.status;
-        const max = assetStats(assetId).maxHp;
+        const max = assetStats(a).maxHp;
         return (
           <g key={assetId} className={moving ? 'sm-drive' : undefined}>
-            <AssetSprite assetId={assetId} x={p.x} y={p.y} share={hp / max} disabled={status === 'disabled'} mirror={mirror} />
+            <AssetSprite held={a} x={p.x} y={p.y} share={hp / max} disabled={status === 'disabled'} mirror={mirror} />
             {(frame || hp < max) && <HpBar x={p.x} y={p.y + 3} w={34} value={hp} max={max} tone={status === 'disabled' ? '#ef5a4a' : hp / max > 0.5 ? '#43d17a' : '#f2b233'} />}
           </g>
         );

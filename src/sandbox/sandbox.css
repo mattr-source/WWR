@@ -218,7 +218,16 @@
 .sbx-powered { animation: sbx-powered 0.8s ease-out both; }
 @keyframes sbx-powered { 0% { filter: brightness(1.8) drop-shadow(0 0 16px #67e8f9); } 100% { filter: none; } }
 
+/* A milestone rank swaps the Asset's render: old stage out, new stage in. */
+.sbx-render-out { animation: sbx-render-out 0.7s ease-in 2.4s both; }
+@keyframes sbx-render-out { to { opacity: 0; filter: brightness(2); } }
+.sbx-render-in { animation: sbx-render-in 0.9s ease-out 2.6s both; }
+@keyframes sbx-render-in { 0% { opacity: 0; filter: brightness(2.2) drop-shadow(0 0 18px #ffd66b); } 100% { opacity: 1; filter: none; } }
+.sbx-kit-glow { animation: sbx-crate 1.1s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
+  .sbx-render-out, .sbx-render-in, .sbx-kit-glow { animation: none !important; }
+  .sbx-render-out { opacity: 0; }
   .sm-route, .sm-drive, .sm-march, .sm-reticle-live, .sbx-flame, .sbx-chamber-light, .sbx-powered { animation: none !important; }
   .sbx-arm, .sbx-part-out, .sbx-part-in, .sbx-weld-burst, .sbx-power-flash { animation: none !important; opacity: 0; }
 }

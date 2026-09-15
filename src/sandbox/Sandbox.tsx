@@ -31,6 +31,10 @@ import {
   assetRepairQuote,
   assetStats,
   battleCasualties,
+  nextAssetPackage,
+  nextAssetRank,
+  SANDBOX_ASSET_RANK_CAP,
+  type TaskAsset,
   companyLevel,
   describeEvent,
   describeReward,
@@ -55,6 +59,9 @@ import {
 } from '../../shared/sandbox';
 import {SANDBOX_SEASON_1_TEST} from '../../shared/sandboxSeason';
 import {assetArtUrl} from '../../shared/assetVisuals';
+import {PACKAGE_ATTRIBUTE, PACKAGE_KEYS, PACKAGE_LABEL} from '../../shared/upgrades';
+import {AssetKitOverlay} from './RefitArt';
+import RefitCeremony from './RefitCeremony';
 import {battleFrame} from './beats';
 import InstallCeremony from './InstallCeremony';
 import RobotBay from './RobotBay';
@@ -187,6 +194,7 @@ export default function Sandbox() {
   const selected = state.selectedSite ? findSite(state, state.selectedSite) : null;
   const patrolId = `d${day}-patrol-${state.stats.patrolWins + 1}`;
   const ceremony = state.lastInstall && state.seenInstallAt !== state.lastInstall.at ? state.lastInstall : null;
+  const refit = !ceremony && state.lastRefit && state.seenRefitAt !== state.lastRefit.at ? state.lastRefit : null;
   const needsBay = ROLES.some((r) => state.robots[r].status === 'destroyed' || robotNeedsRepair(state.robots[r]));
   const needsHangar = state.assets.some((a) => assetNeedsRepair(a));
   const riderOpen = riderMode === 'open' || (riderMode === 'auto' && !state.tutorial.completed && !frame && !selected);
@@ -303,6 +311,11 @@ export default function Sandbox() {
           </div>
         )}
 
+        {/* Honest label: the robot troops, Dominion machines and fitted kit on the map are provisional. */}
+        <p className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[70%] rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
+          Temporary art: robots, Dominion machines, fitted kit
+        </p>
+
         {toast && (
           <p
             key={toast.key}
@@ -376,11 +389,17 @@ export default function Sandbox() {
         </div>
       </nav>
 
-      {report && !ceremony && <BattleReport state={state} onDone={() => act({type: 'battle.seen'})} />}
+      {report && !ceremony && !refit && <BattleReport state={state} onDone={() => act({type: 'battle.seen'})} />}
 
       {ceremony && (
         <div key={ceremony.at} className="contents">
           <InstallCeremony install={ceremony} reduced={reduced} onDone={() => act({type: 'install.seen'})} />
+        </div>
+      )}
+
+      {refit && (
+        <div key={refit.at} className="contents">
+          <RefitCeremony refit={refit} assets={state.assets} reduced={reduced} onDone={() => act({type: 'refit.seen'})} />
         </div>
       )}
 
@@ -501,12 +520,12 @@ function TargetCard({state, siteId, attention, onClose, onMarch}: {state: Sandbo
           const asset = assetOf(a.assetId);
           const ok = a.status === 'ready';
           const on = assets.includes(a.assetId);
-          const url = assetArtUrl(a.assetId, 1);
+          const url = assetArtUrl(a.assetId, a.rank);
           return (
             <button key={a.assetId} disabled={!ok} aria-pressed={on} onClick={() => setAssets(toggle(assets, a.assetId))} className={`flex min-h-11 flex-col items-center rounded-md border px-1 py-1 text-[12px] disabled:opacity-40 ${on ? 'border-cyan-400 bg-cyan-950/50' : 'border-neutral-700 bg-neutral-900'}`}>
               {url && <img src={url} alt="" className="h-11 w-11 object-contain" />}
               <span className="font-semibold">{asset?.name}</span>
-              <span className="text-[11px] text-neutral-400">{ok ? `${Math.round(a.hp)}/${assetStats(a.assetId).maxHp} HP${isDrone(a.assetId) ? ' · drone' : ''}` : a.status}</span>
+              <span className="text-[11px] text-neutral-400">{ok ? `R${a.rank} · ${Math.round(a.hp)}/${assetStats(a).maxHp} HP${isDrone(a.assetId) ? ' · drone' : ''}` : a.status}</span>
             </button>
           );
         })}
@@ -560,8 +579,9 @@ function BattleReport({state, onDone}: {state: SandboxState; onDone: () => void}
                 );
               })}
               {Object.entries(e.after.assets).map(([id, a]) => {
-                const max = assetStats(id).maxHp;
-                const url = assetArtUrl(id, 1);
+                const held = state.assets.find((x) => x.assetId === id)!;
+                const max = assetStats(held).maxHp;
+                const url = assetArtUrl(id, held.rank);
                 return (
                   <li key={id} className="flex items-center gap-2">
                     {url && <img src={url} alt="" className={`h-9 w-9 object-contain ${a.status === 'disabled' ? 'brightness-50' : ''}`} />}
@@ -599,28 +619,50 @@ function BattleReport({state, onDone}: {state: SandboxState; onDone: () => void}
 /* Hangar, Operations, More                                                   */
 /* -------------------------------------------------------------------------- */
 
+/** An Asset's own render at its rank, with its fitted kit drawn over it. */
+function AssetPortrait({a, size, dim}: {a: TaskAsset; size: number; dim?: boolean}) {
+  const asset = assetOf(a.assetId);
+  const url = assetArtUrl(a.assetId, a.rank);
+  return (
+    <div className="relative shrink-0" style={{width: size, height: size}}>
+      {url && <img src={url} alt={`${asset?.name ?? a.assetId}, Service Rank ${a.rank}`} className={`absolute inset-0 h-full w-full object-contain ${dim ? 'brightness-50' : ''}`} />}
+      {asset && <AssetKitOverlay category={asset.category} packages={a.packages} rank={a.rank} className="absolute inset-0 h-full w-full" />}
+    </div>
+  );
+}
+
+const ATTR_LABEL = {firepower: 'Firepower', armour: 'Armour', mobility: 'Mobility', range: 'Range', detection: 'Detection'} as const;
+const two = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+
 function Hangar({state, now, onAct, onTestAdvance}: {state: SandboxState; now: number; onAct: (a: SandboxAction) => void; onTestAdvance: (minutes: number) => void}) {
+  const [open, setOpen] = useState<string>('');
   return (
     <>
+      <p className="px-1 text-[12px] leading-snug text-neutral-400">
+        Service Rank and the four packages use the live game's rules and attributes. Prices are the live provisional step prices, paid here in <b>test Credits</b> (you have {state.credits.toLocaleString()}). Upgrades are instant, as in the live game.
+      </p>
       {state.assets.map((a) => {
         const asset = assetOf(a.assetId);
-        const max = assetStats(a.assetId).maxHp;
+        const st = assetStats(a);
         const q = assetRepairQuote(a);
         const out = !!state.march && state.march.assets.includes(a.assetId);
-        const url = assetArtUrl(a.assetId, 1);
+        const rank = nextAssetRank(a);
+        const expanded = open === a.assetId;
         return (
           <div key={a.assetId}>
-            <Section title={`${asset?.name ?? a.assetId} · ${asset?.code ?? ''}`} right={<span className="text-[12px] text-neutral-500">Service Rank 1</span>}>
+            <Section title={`${asset?.name ?? a.assetId} · ${asset?.code ?? ''}`} right={<span className="text-[12px] text-neutral-400">Service Rank {a.rank}/{SANDBOX_ASSET_RANK_CAP}</span>}>
               <div className="flex gap-3">
-                {url && <img src={url} alt={asset?.name} className={`h-24 w-24 shrink-0 object-contain ${a.status === 'disabled' ? 'brightness-50' : ''}`} />}
+                <AssetPortrait a={a} size={112} dim={a.status === 'disabled'} />
                 <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-[13px] text-neutral-300">{asset?.blurb}</p>
-                  <Bar value={a.hp} max={max} tone={a.hp / max > 0.5 ? 'bg-emerald-500' : 'bg-amber-500'} label="HP" />
+                  <Bar value={a.hp} max={st.maxHp} tone={a.hp / st.maxHp > 0.5 ? 'bg-emerald-500' : 'bg-amber-500'} label="HP" />
                   <p className="font-mono text-[12px] text-neutral-300">
-                    {Math.round(a.hp)} / {max} HP · volley {assetStats(a.assetId).volley}
+                    {Math.round(a.hp)} / {st.maxHp} HP · volley {st.volley}
                   </p>
                   <p className={`text-[13px] font-semibold ${a.status === 'ready' ? 'text-emerald-300' : 'text-amber-300'}`}>
-                    {out ? 'Out with the Task Force' : a.status === 'repairing' ? `Repairing · ${clock((a.job?.completesAt ?? now) - now)}` : a.status === 'disabled' ? 'Knocked out' : a.hp < max ? 'Damaged' : 'Ready'}
+                    {out ? 'Out with the Task Force' : a.status === 'repairing' ? `Repairing · ${clock((a.job?.completesAt ?? now) - now)}` : a.status === 'disabled' ? 'Knocked out' : a.hp < st.maxHp ? 'Damaged' : 'Ready'}
+                  </p>
+                  <p className="text-[11px] text-neutral-500">
+                    {PACKAGE_KEYS.map((k) => `${PACKAGE_LABEL[k]} ${a.packages[k]}`).join(' · ')}
                   </p>
                 </div>
               </div>
@@ -638,11 +680,78 @@ function Hangar({state, now, onAct, onTestAdvance}: {state: SandboxState; now: n
                   Test: finish repair
                 </button>
               )}
+              <button className={`${secondary} mt-2 w-full`} aria-expanded={expanded} onClick={() => setOpen(expanded ? '' : a.assetId)}>
+                {expanded ? 'Hide upgrades' : `Upgrade ${asset?.name}`}
+              </button>
+              {expanded && (
+                <div className="mt-2 space-y-2">
+                  <div className="rounded border border-neutral-800 bg-black/30 p-2">
+                    <p className="flex justify-between text-[14px] font-semibold text-neutral-100">
+                      <span>Service Rank {a.rank}{rank ? ` → ${rank.to}` : ''}</span>
+                      {rank && <span className="font-mono text-amber-200">{rank.credits} test Credits</span>}
+                    </p>
+                    {rank ? (
+                      <>
+                        <p className="text-[12px] text-neutral-400">Raises every attribute.{rank.milestone ? ' Milestone: a double step, and the Asset\'s render changes.' : ' The rank plate is replaced.'}</p>
+                        {(['firepower', 'armour', 'mobility', 'range', 'detection'] as const).map((k) => (
+                          <p key={k} className="flex justify-between font-mono text-[12px]">
+                            <span className="font-sans text-neutral-400">{ATTR_LABEL[k]}</span>
+                            <span>
+                              {two(rank.before.attributes[k])} → <span className="text-emerald-300">{two(rank.after.attributes[k])}</span>
+                            </span>
+                          </p>
+                        ))}
+                        <button className={`${primary} mt-1 w-full`} disabled={out || state.credits < rank.credits} onClick={() => onAct({type: 'asset.rank', assetId: a.assetId})}>
+                          {out ? 'Out with the Task Force' : state.credits < rank.credits ? `Need ${rank.credits - state.credits} more test Credits` : `Rank up to ${rank.to}`}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-[12px] text-neutral-400">At the Season 1 cap ({SANDBOX_ASSET_RANK_CAP} ranks a season).</p>
+                    )}
+                  </div>
+                  {PACKAGE_KEYS.map((k) => {
+                    const pq = nextAssetPackage(a, k);
+                    const attr = PACKAGE_ATTRIBUTE[k];
+                    return (
+                      <div key={k} className="rounded border border-neutral-800 bg-black/30 p-2">
+                        <p className="flex justify-between text-[14px] font-semibold text-neutral-100">
+                          <span>
+                            {PACKAGE_LABEL[k]} {a.packages[k]}
+                            {pq.to ? ` → ${pq.to}` : ''}
+                          </span>
+                          {pq.to && <span className="font-mono text-amber-200">{pq.credits} test Credits</span>}
+                        </p>
+                        <p className="flex justify-between font-mono text-[12px]">
+                          <span className="font-sans text-neutral-400">{ATTR_LABEL[attr]}</span>
+                          <span>
+                            {two(pq.before.attributes[attr])}
+                            {pq.to ? (
+                              <>
+                                {' → '}
+                                <span className="text-emerald-300">{two(pq.after.attributes[attr])}</span>
+                              </>
+                            ) : null}
+                          </span>
+                        </p>
+                        {pq.to ? (
+                          <button className={`${secondary} mt-1 w-full`} disabled={out || state.credits < pq.credits} onClick={() => onAct({type: 'asset.package', assetId: a.assetId, pkg: k})}>
+                            {out ? 'Out with the Task Force' : state.credits < pq.credits ? `Need ${pq.credits - state.credits} more test Credits` : `Fit ${PACKAGE_LABEL[k]} ${pq.to}`}
+                          </button>
+                        ) : (
+                          <p className="text-[11px] text-neutral-500">{a.rank >= SANDBOX_ASSET_RANK_CAP ? 'At the Season 1 cap.' : 'A package can never outrank its Asset: raise the Service Rank first.'}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Section>
           </div>
         );
       })}
-      <p className="px-1 text-[11px] leading-snug text-neutral-500">Asset art is the game's own. Asset upgrades are not part of this test slice. Assets are never destroyed: a knocked-out Asset is repaired.</p>
+      <p className="px-1 text-[11px] leading-snug text-neutral-500">
+        Asset renders are the game's own art: the look changes at rank 10 (the existing r10 render). The fitted kit modules and rank plate drawn over them are <b>temporary prototype art</b> so every upgrade shows a visible part; the Season 1 decisions (2026-09-07) said packages change no visuals, and Matt's 2026-09-15 direction asks for a visible part at every level, so this needs his confirmation. Assets are never destroyed: a knocked-out Asset is repaired. Package reset is not in the sandbox.
+      </p>
     </>
   );
 }

@@ -84,6 +84,38 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
     day, +5,000 test supplies, "finish now" on jobs, a look-preview slider for levels 1 to 50 (changes nothing),
     and Reset.
 
+## Scenes: Home Base and World Map (2026-09-15)
+
+The sandbox has two scenes, like the live game. The current one is in the URL hash (`#base`, the default, or
+`#world`), so a reload lands on the same view and no second storage key is needed.
+
+- **Home Base** (`src/sandbox/HomeBase.tsx`) draws the live base from `shared/base.ts`: `board-v5.webp`, the
+  nineteen pads, all fifteen building and vehicle arts at their default pads (`resolvePlacements([])`), the
+  Command Center box painted into the board and the four Task Force slabs. It does not use
+  `src/live/BaseBoard.tsx`, which talks to the server. What each building does is in `src/sandbox/baseRoles.ts`:
+
+  | Building | Opens |
+  |---|---|
+  | Fabrication Shop | Robot Bay (robots, Field Workshop) |
+  | Materials Recovery Yard | Repairs: every damaged robot and Asset with its art, repair or remanufacture |
+  | Armour / Rotary / Drone buildings | Hangar at the Abrams / Hind / Global Hawk, upgrades open |
+  | Tactical Operations Center | Operations (objectives, Daily Operations lanes, Cache) |
+  | Signals Center, Command Center | Reports (Task Force, service record, test controls) |
+  | Task Force Alpha slab | World Map |
+  | All other buildings, Task Forces Bravo to Delta | A plain "no function in the practice sandbox" sheet with the art |
+
+- **World Map** (`src/sandbox/SectorMap.tsx` over `src/sandbox/worldGround.ts`): the sector map, targets, march,
+  attack and return now stand on the live Season 1 ground. `worldGround.ts` runs the real generator
+  (`shared/terrain.ts` `groundAt`, `shared/terrainProps.ts` `propsInPlot`, the prop atlas) and ports the painting
+  arithmetic of `src/live/terrainPaint.ts` (which the sandbox may not import). Practice world id 1, season 1, home
+  plot (34, 22). Props are kept off targets, the base and the Task Force. The home-base marker on the map goes back
+  to Home Base.
+- **Navigation:** bottom tabs with art (board crop, terrain prop, TOC, Signals Center): Home Base, World Map,
+  Operations, Reports. The march strip shows on both scenes, with "Map ›" from the base.
+- **Comms** (`src/sandbox/Comms.tsx`): the live Comms bar and full-screen panel look with the tabs from
+  `shared/chat.ts`, shown **offline**: "Comms is offline in the practice sandbox", no messages, input and Send
+  disabled. It imports only `react` and `shared/chat.ts`.
+
 ## Where things live
 
 | File | What |
@@ -96,13 +128,20 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
 | `src/sandbox/RobotBay.tsx`, `InstallCeremony.tsx` | Robot Bay, Field Workshop, look preview, install ceremony. |
 | `src/sandbox/RobotFigure.tsx` | Robot troops and Dominion machines as layered vector parts (**temporary art**). |
 | `src/sandbox/RefitArt.tsx`, `RefitCeremony.tsx` | Asset kit modules, rank plates and Workshop fittings (**temporary prototype art**), and the install ceremony for Asset and Workshop upgrades. |
-| `src/sandbox/Sandbox.tsx` | The screen: HUD, Rider, target card, battle report, Hangar, Operations, record, test controls. |
+| `src/sandbox/Sandbox.tsx` | The screen: HUD, Rider, scene switch, target card, battle report, Hangar, Operations, record, test controls. |
+| `src/sandbox/HomeBase.tsx`, `baseRoles.ts` | Home Base scene on the live board; what each building opens. |
+| `src/sandbox/worldGround.ts` | Live Season 1 terrain painted under the World Map. |
+| `src/sandbox/BasePanels.tsx` | Scene tabs, building-art cards, Repairs, the no-function building sheet. |
+| `src/sandbox/Comms.tsx` | Offline Comms bar and panel. |
 
 ## Art: what's real and what's temporary
 
 - **Existing WWR art reused:**
   - Asset hero renders `public/assets/<id>/r01.webp` (via `shared/assetVisuals.ts`), as the live world map draws them.
   - Matt's base buildings (`building-fabrication-shop`, `building-recovery-yard`, `building-garrison-barracks` for the mock rival).
+  - The whole live base: `board-v5.webp` and all fifteen building and vehicle arts, on Home Base and as card art
+    in Operations, Repairs and Reports.
+  - The live Season 1 terrain generator and prop atlas, under the World Map.
   - Terrain atlas props (`shared/terrainAtlas.ts`) and the Alliance Convoy truck.
   - General Rider's portrait.
 - **Temporary vector art (labelled "Temporary art" on screen), not approved final art:**
@@ -111,7 +150,8 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
   - The Asset kit modules, service components, rank plates and Field Workshop fittings. They are drawn over existing art so every
     level shows a visible change, but no per-level Asset or building art exists. The only real per-level Asset art
     change in Season 1 is the rank 10 render.
-  - The map carries a permanent label: "Temporary art: robots, Dominion machines, fitted kit".
+  - The map carries a permanent label: "Temporary art: robots, Dominion machines, fitted kit"; Home Base carries
+    "Temporary art: robots, Asset kit".
   - No approved robot or Dominion art exists yet. No paid or generated images were used.
 - The rejected flat unit SVGs (`public/sandbox/units/*`) and the old `Battlefield.tsx` are removed.
 

@@ -122,3 +122,16 @@ test('map detail keeps every fitted component but drops sockets, pips and the ne
     }
   }
 });
+
+test('every component declares a mount point inside the kit box (checked against the renders in the browser run)', () => {
+  for (const {category} of STARTERS) {
+    const markup = kit(category, 10);
+    const mounts = [...markup.matchAll(/data-equip="([^"]+)" data-mount="([^"]+)"/g)];
+    assert.equal(mounts.length, 9);
+    for (const [, id, m] of mounts) {
+      const [x, y] = m.split(' ').map(Number);
+      assert.ok(x >= 2 && x <= 98 && y >= 2 && y <= 98, `${id} mount ${m} inside the box`);
+      assert.ok(!(x >= 77 && y >= 76), `${id} is not mounted on the rank badge`);
+    }
+  }
+});

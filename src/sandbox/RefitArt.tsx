@@ -487,7 +487,7 @@ const ARMOUR_KIT: ServiceDef[] = [
 ];
 
 const ROTARY_KIT: ServiceDef[] = [
-  {id: 'wire-cutter', name: 'Wire-strike cutter', x: 86, y: 43, s: 1.9, draw: (u) => (
+  {id: 'wire-cutter', name: 'Wire-strike cutter', x: 81, y: 48, s: 1.9, draw: (u) => (
     <>
       <path d="M0 0l5 -3l-1 3.4l3 -1.8l-1.4 3.2l-5.6 1.4z" fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.45} />
       <path d="M1 0.6l4.2-2.4" stroke="#fff" strokeWidth={0.4} opacity={0.6} className="ra-nf" />
@@ -590,13 +590,13 @@ const AIRCRAFT_KIT: ServiceDef[] = [
       <path d="M9 63.6L31 55.4" stroke={AMB} strokeWidth={1.1} strokeDasharray="2 1.2" className="ra-nf" />
     </>
   )},
-  {id: 'flare-pod', name: 'Tail flare dispenser', x: 20, y: 49, s: 1.9, draw: (u) => (
+  {id: 'flare-pod', name: 'Tail flare dispenser', x: 32, y: 45, s: 1.5, draw: (u) => (
     <>
       {blk(u, 0, 0, 6, 3.4, 'gun', 0.5, 0.4)}
       {[0, 1, 2].map((c) => <circle key={c} cx={1.3 + c * 1.8} cy={1.7} r={0.55} fill={MAT.dark[2]} stroke={AMB} strokeWidth={0.3} />)}
     </>
   )},
-  {id: 'datalink-blade', name: 'Ventral datalink antenna', x: 61, y: 60.5, s: 2.3, draw: (u) => (
+  {id: 'datalink-blade', name: 'Ventral datalink antenna', x: 64, y: 56, s: 2.3, draw: (u) => (
     <>
       <path d="M0 0h4l-1.2 4.4h-1.6z" fill={fill(u, 'sand')} stroke={OL} strokeWidth={0.45} />
       <circle cx={2} cy={3.4} r={0.55} fill={CY} stroke={OL} strokeWidth={0.2} className="ra-blink" />
@@ -615,7 +615,7 @@ const AIRCRAFT_KIT: ServiceDef[] = [
       <path d="M7 66.2l-2.8-8.6 2-.8 3.6 8.6z" fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.45} />
     </>
   )},
-  {id: 'intake-guard', name: 'Engine intake guard', x: 58.5, y: 38.2, s: 1, draw: (u) => (
+  {id: 'intake-guard', name: 'Engine intake guard', x: 51, y: 37.5, s: 1, draw: (u) => (
     <>
       {/* A solid mesh cover over the nacelle intake, amber rim so it reads at map size. */}
       <ellipse cx={0} cy={0} rx={2.4} ry={3.2} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.6} />
@@ -643,10 +643,16 @@ function serviceDraw(u: string, category: AssetCategory, step: number) {
   const d = SERVICE_KIT[serviceFamily(category)][step - 2];
   if (!d) return null;
   return (
-    <g data-equip={d.id} transform={`translate(${d.x} ${d.y}) scale(${d.s})`}>
+    <g data-equip={d.id} data-mount={serviceMount(d).join(' ')} transform={`translate(${d.x} ${d.y}) scale(${d.s})`}>
       {d.draw(u)}
     </g>
   );
+}
+
+/** Where a component bolts on, in the 100x100 kit box (items drawn in absolute coordinates name their own). */
+const ABS_MOUNT: Record<string, [number, number]> = {'nav-lights': [94, 38.4], winglets: [95.6, 36], 'de-icing': [80, 42.6]};
+function serviceMount(d: ServiceDef): [number, number] {
+  return d.x === 0 && d.y === 0 ? (ABS_MOUNT[d.id] ?? [50, 50]) : [d.x, d.y];
 }
 
 /** The blanking cover over the mount the given rank step will use. */
@@ -654,8 +660,7 @@ function serviceCover(category: AssetCategory, step: number) {
   const d = SERVICE_KIT[serviceFamily(category)][step - 2];
   if (!d) return null;
   // Items drawn in absolute coordinates (lights, winglets) put their cover at their first point.
-  const ABS: Record<string, [number, number]> = {'nav-lights': [94, 38.4], winglets: [95.6, 36], 'de-icing': [80, 42.6]};
-  const [cx, cy] = d.x === 0 && d.y === 0 ? (ABS[d.id] ?? [50, 50]) : [d.x, d.y];
+  const [cx, cy] = serviceMount(d);
   return (
     <g data-cover={d.id} transform={`translate(${cx} ${cy})`} opacity={0.85}>
       <rect x={-1.7} y={-1.2} width={3.4} height={2.4} rx={0.5} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.4} />

@@ -17,14 +17,12 @@
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {LANES, LANE_COPY, LANES_FOR_CACHE, cacheReward, laneReward} from '../../shared/season1Ops';
-import {EXERCISES} from '../../shared/exercises';
 import {
   ROLES,
   type Role,
   type SandboxAction,
   type SandboxState,
   SANDBOX_LANE_TRIGGER,
-  SUPPLY_KINDS,
   TUTORIAL,
   assetNeedsRepair,
   assetOf,
@@ -39,11 +37,8 @@ import {
   describeEvent,
   describeReward,
   enemyTotals,
-  findSite,
   forceTotals,
-  isDrone,
   lanesDone,
-  marchSeconds,
   partsAt,
   robotNeedsRepair,
   robotStats,
@@ -53,9 +48,10 @@ import {
   seasonObjectives,
   siteEnemies,
   siteLabel,
-  siteReward,
   siteStrength,
   tutorialSay,
+  type Site,
+  squadDeployment,
 } from '../../shared/sandbox';
 import {SANDBOX_SEASON_1_TEST} from '../../shared/sandboxSeason';
 import {assetArtUrl} from '../../shared/assetVisuals';
@@ -67,12 +63,18 @@ import InstallCeremony from './InstallCeremony';
 import RobotBay from './RobotBay';
 import {RobotFigure} from './RobotFigure';
 import Comms from './Comms';
-import {ArtCard, BoardThumb, BuildingImg, BuildingInfo, PropThumb, RepairYard, SceneTab} from './BasePanels';
-import HomeBase, {type BaseTarget, buildingLabel} from './HomeBase';
+import {ArtCard, BuildingImg, BuildingInfo, RepairYard} from './BasePanels';
+import {BUILDING_ROLE, buildingLabel} from './baseRoles';
 import SeasonHub from './SeasonHub';
-import SectorMap from './SectorMap';
+import {GameClock} from './original/GameClock';
+import SandboxBaseBoard from './original/SandboxBaseBoard';
+import SandboxGuide from './original/SandboxGuide';
+import {AccountPanel, Reports, SquadSetup} from './original/SandboxPanels';
+import WorldView, {marchLine} from './original/WorldView';
+import {t} from './original/strings';
+import {BOARD_BUILDINGS, type BuildingEntry} from '../../shared/base';
 import {SANDBOX_STORAGE_KEY, dispatchSandbox, openSandbox, resetSandbox} from './store';
-import {Bar, CostLine, SUPPLY_LABEL, SUPPLY_TONE, Section, Sheet, TempArtTag, clock, minutesLabel, primary, secondary, testButton} from './ui';
+import {Bar, CostLine, Section, Sheet, TempArtTag, clock, minutesLabel, primary, secondary, testButton} from './ui';
 import './sandbox.css';
 import './refitArt.css';
 
@@ -81,13 +83,19 @@ const ROUND_MS = CONFIG.roundSeconds * 1000;
 /** Accidental double taps are closer together than this. */
 const TAP_GUARD_MS = 350;
 
-type SheetKind = null | 'bay' | 'hangar' | 'ops' | 'more' | 'repair' | 'info' | 'season';
+type SheetKind = null | 'bay' | 'hangar' | 'ops' | 'more' | 'repair' | 'info' | 'season' | 'squad' | 'reports';
 type Scene = 'base' | 'world';
 
-/** The scene lives in the URL hash, so a reload lands on the same view without another storage key. */
+/**
+ * The scene lives in the URL hash, so a reload lands on the same view without another storage key.
+ * No hash opens the World view, as the live game does (LiveApp.tsx: "The map, not the base").
+ */
 function sceneFromHash(): Scene {
-  return typeof window !== 'undefined' && window.location.hash === '#world' ? 'world' : 'base';
+  return typeof window !== 'undefined' && window.location.hash === '#base' ? 'base' : 'world';
 }
+
+/** The practice Task Force's Asset for each runway building's category (shared/base.ts entries). */
+const ASSET_OF_CATEGORY: Partial<Record<string, string>> = Object.fromEntries(CONFIG.taskForceAssets.map((id) => [assetOf(id)?.category ?? id, id]));
 
 function actionId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -127,7 +135,10 @@ export default function Sandbox() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
   const [bayRole, setBayRole] = useState<Role | undefined>(undefined);
-  const [riderMode, setRiderMode] = useState<'auto' | 'open' | 'closed'>('auto');
+  const [commsOpen, setCommsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [guideH, setGuideH] = useState(0);
+  const [squadView, setSquadView] = useState('Alpha');
   const [wall, setWall] = useState(() => Date.now());
   const lastTap = useRef(0);
 
@@ -180,8 +191,6 @@ export default function Sandbox() {
     document.title = 'Field Sandbox · World War Rogue';
   }, []);
 
-  const stepIndex = state?.tutorial.step ?? 0;
-  useEffect(() => setRiderMode('auto'), [stepIndex]);
 
   useEffect(() => {
     if (!toast) return;
@@ -214,236 +223,217 @@ export default function Sandbox() {
   const e = state.encounter;
   const frame = e && m && m.phase === 'engaged' && e.marchId === m.id ? battleFrame(e, now, ROUND_MS) : null;
   const report = e && !e.seen && now >= e.endsAt ? e : null;
-  const selected = state.selectedSite ? findSite(state, state.selectedSite) : null;
   const patrolId = `d${day}-patrol-${state.stats.patrolWins + 1}`;
   const ceremony = state.lastInstall && state.seenInstallAt !== state.lastInstall.at ? state.lastInstall : null;
   const refit = !ceremony && state.lastRefit && state.seenRefitAt !== state.lastRefit.at ? state.lastRefit : null;
-  const needsBay = ROLES.some((r) => state.robots[r].status === 'destroyed' || robotNeedsRepair(state.robots[r]));
-  const needsHangar = state.assets.some((a) => assetNeedsRepair(a));
-  const riderOpen = riderMode === 'open' || (riderMode === 'auto' && !state.tutorial.completed && !frame && !selected);
-  const attention = (on: boolean) => (on ? ' sbx-attention' : '');
-  const wantWorld = want === 'site.select' || want === 'march.start' || want === 'march.arrive' || want === 'battle.seen';
-  const baseHighlight: BaseTarget['kind'] | null =
-    want === 'robot.upgrade' || want === 'upgrade.done' ? 'bay' : want === 'recover' ? 'repair' : want === 'ops.cache' ? 'season' : wantWorld ? 'world' : null;
-  const openBase = (t: BaseTarget) => {
-    if (t.kind === 'world') setScene('world');
-    else if (t.kind === 'bay') setSheet('bay');
-    else if (t.kind === 'repair') setSheet('repair');
-    else if (t.kind === 'hangar') {
-      setHangarFocus(t.assetId);
-      setSheet('hangar');
-    } else if (t.kind === 'ops') setSheet('ops');
-    else if (t.kind === 'season') setSheet('season');
-    else if (t.kind === 'record' || t.kind === 'command') setSheet('more');
-    else {
-      setInfoBuilding(t.buildingId);
+  const inSheet = sheet !== null || commsOpen || menuOpen || !!report || !!ceremony || !!refit;
+  const deploy = squadDeployment(state);
+  // Where General Rider points: the live guide's data-guide outline, on whichever view the step is on.
+  const worldStep = want === 'site.select' || want === 'march.start' || want === 'march.arrive' || want === 'battle.seen' || want === 'march.home';
+  const baseTarget = want === 'robot.upgrade' || want === 'upgrade.done' ? 'building:fabrication_shop' : want === 'recover' ? 'building:recovery_yard' : want === 'ops.cache' ? 'building:tactical_operations_center' : null;
+  const highlight = !want
+    ? null
+    : scene === 'world'
+      ? want === 'march.start'
+        ? 'attack'
+        : want === 'march.arrive' || want === 'march.home'
+          ? 'squads-out'
+          : baseTarget
+            ? 'my-base'
+            : null
+      : worldStep
+        ? 'world-map'
+        : baseTarget;
+  const chatH = 48;
+  const bottomInset = chatH + guideH;
+  const fightOver = frame ? frame.over : null;
+  const line = marchLine(state, now, fightOver, frame ? frame.round : null, e?.rounds.length ?? 0);
+
+  const openEntry = (entry: BuildingEntry) => {
+    if (entry.kind === 'command_center') setSheet('more');
+    else if (entry.kind === 'taskforce') {
+      setSquadView(entry.squad);
+      setSheet('squad');
+    } else if (entry.kind === 'depot') {
+      setInfoBuilding('depot');
       setSheet('info');
+    } else if (entry.kind === 'assets') {
+      const assetId = ASSET_OF_CATEGORY[entry.category] ?? null;
+      if (assetId) {
+        setHangarFocus(assetId);
+        setSheet('hangar');
+      } else {
+        setInfoBuilding(BOARD_BUILDINGS.find((b) => b.entry.kind === 'assets' && b.entry.category === entry.category)?.id ?? 'depot');
+        setSheet('info');
+      }
+    } else {
+      const role = BUILDING_ROLE[entry.id];
+      const kind = role?.target.kind;
+      if (kind === 'bay') setSheet('bay');
+      else if (kind === 'repair') setSheet('repair');
+      else if (kind === 'season') setSheet('season');
+      else if (kind === 'record') setSheet('more');
+      else {
+        setInfoBuilding(entry.id);
+        setSheet('info');
+      }
     }
   };
 
+  const accountButton = (
+    <button onClick={() => setMenuOpen((o) => !o)} title="Account" aria-label="Account" data-guide="account" className="pointer-events-auto h-11 w-11 shrink-0 overflow-hidden rounded-full border border-neutral-600 bg-black/70 backdrop-blur transition hover:border-orange-500">
+      <span className="flex h-full w-full items-center justify-center text-[18px] text-orange-300" aria-hidden>
+        ★
+      </span>
+    </button>
+  );
+
+  const attackFor = (site: Site) => {
+    if (deploy.blocked) {
+      return (
+        <p className="mt-2 rounded border border-neutral-700 bg-neutral-900/80 px-2 py-1.5 text-xs text-neutral-300" data-unavailable>
+          {deploy.blocked}
+        </p>
+      );
+    }
+    const ours = forceTotals(state, deploy.robots, deploy.assets);
+    const theirs = site.battle ? enemyTotals(siteEnemies(site, state), siteStrength(site, state)) : null;
+    return (
+      <>
+        <p className="mt-1 text-[11px] text-neutral-400">
+          Task Force Alpha: {deploy.robots.length} robot{deploy.robots.length === 1 ? '' : 's'}, {deploy.assets.length} Asset{deploy.assets.length === 1 ? '' : 's'} · HP {ours.hp} · firepower {ours.firepower}
+          {theirs && (
+            <span className="text-red-300/80">
+              {' '}
+              vs HP {theirs.hp} · firepower {theirs.firepower}
+            </span>
+          )}
+          {deploy.waiting.length > 0 && <span className="block text-amber-300/80">Not ready, staying home: {deploy.waiting.join(', ')}</span>}
+        </p>
+        <button onClick={() => act({type: 'march.start', siteId: site.id, robots: deploy.robots, assets: deploy.assets})} data-guide="attack" className={`mt-2 min-h-11 w-full rounded border px-3 py-2 text-sm font-semibold ${site.battle ? 'border-red-800 bg-red-950/40 text-red-200 hover:border-red-500' : 'border-amber-700 bg-amber-950/40 text-amber-200 hover:border-amber-400'}`}>
+          {site.battle ? t('map.attack') : 'March and hold'}
+        </button>
+      </>
+    );
+  };
+
   return (
-    <div className="sbx-root fixed inset-0 flex flex-col overflow-hidden bg-[#b9ab8a] text-neutral-200">
-      {/* HUD */}
-      <header className="z-20 bg-[#0d0b08]/92 px-2 pb-1.5 backdrop-blur" style={{paddingTop: 'calc(env(safe-area-inset-top) + 0.35rem)'}}>
-        <div className="mx-auto flex max-w-xl items-center gap-2">
-          <a href="/" className={`${secondary} inline-flex min-w-11 shrink-0 items-center justify-center px-2.5`} aria-label="Back to the game">
-            ←
-          </a>
-          <button className="min-h-11 min-w-0 flex-1 text-left" onClick={() => setSheet('more')} aria-label="Task Force record">
-            <span className="flex items-baseline gap-2">
-              <span className="truncate text-[14px] font-semibold text-neutral-100">{state.company.name}</span>
-              <span className="shrink-0 rounded bg-cyan-900/70 px-1.5 text-[11px] font-bold text-cyan-200">TF LV {lvl.level}</span>
-            </span>
-            <span className="mt-0.5 block truncate text-[11px] text-neutral-400">
-              {CONFIG.seasonName} · week {week} · sandbox day {day + 1}
-            </span>
-          </button>
-          <button className={`relative flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-md border border-amber-600/80 bg-gradient-to-b from-amber-900/80 to-black px-1`} onClick={() => setSheet('season')} aria-label={`Season 1 Events: week ${week}`} data-hud-events>
-            <img src="/base/building-tactical-operations-center.webp" alt="" className="h-6 w-9 object-contain" />
-            <span className="text-[9px] font-bold uppercase leading-none tracking-wide text-amber-200">Events</span>
-          </button>
-          <span className="shrink-0 rounded border border-amber-700/70 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-tight tracking-wider text-amber-300">
-            Practice
-            <br />
-            test build
-          </span>
-        </div>
-        <div className="mx-auto mt-1 grid max-w-xl grid-cols-5 gap-1">
-          {SUPPLY_KINDS.map((k) => (
-            <div key={k} className="flex items-center gap-1 rounded bg-black/50 px-1 py-1">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{background: SUPPLY_TONE[k]}} aria-hidden="true" />
-              <span className="sr-only">{SUPPLY_LABEL[k]}</span>
-              <span className="truncate font-mono text-[12px] font-semibold text-neutral-100">{state.supplies[k].toLocaleString()}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-1 rounded bg-black/50 px-1 py-1" title="test Credits (sandbox only)">
-            <span className="shrink-0 text-[8px] font-bold uppercase leading-[1.05] text-amber-300">
-              test
-              <br />
-              Cr
-            </span>
-            <span className="truncate font-mono text-[12px] font-semibold text-neutral-100">{state.credits.toLocaleString()}</span>
-          </div>
-        </div>
-      </header>
-
-      {/* General Rider: docked between the HUD and the scene, so it never covers a building, target or control. */}
-      <div className="z-20 bg-[#0d0b08] px-2 pb-1.5" data-rider-dock>
-        <div className="mx-auto max-w-xl">
-          {notice && (
-            <p className="mb-1 flex items-center gap-2 rounded-md border border-amber-700 bg-amber-950/95 px-3 py-1 text-[13px] text-amber-100" role="status">
-              <span className="flex-1">{notice}</span>
-              <button className="min-h-11 px-2 underline" onClick={() => setNotice(null)}>
-                OK
-              </button>
-            </p>
-          )}
-          {riderOpen ? (
-            <section className="flex gap-2 rounded-lg border border-cyan-500/50 bg-[#061319] px-2.5 py-2" aria-live="polite">
-              <img src="/guide/rider-portrait.webp" alt="General Rider" className="h-10 w-10 shrink-0 rounded-full border-2 border-cyan-400/80 object-cover" />
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
-                  <span>General Rider{state.tutorial.completed ? '' : ` · ${state.tutorial.step + 1}/${TUTORIAL.length}`}</span>
-                  <span className="-my-3 flex items-center">
-                    {!state.tutorial.completed && (
-                      <button className="min-h-11 px-2 text-[12px] normal-case tracking-normal text-neutral-400 underline underline-offset-4" onClick={() => act({type: 'tutorial.skip'})}>
-                        Skip
-                      </button>
-                    )}
-                    <button className="min-h-11 min-w-11 text-[18px] leading-none text-cyan-200/80" onClick={() => setRiderMode('closed')} aria-label="Hide General Rider">
-                      –
-                    </button>
-                  </span>
-                </p>
-                <p className="text-[14px] leading-snug text-neutral-100">{tutorialSay(step)}</p>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <p className="text-[13px] font-semibold text-cyan-200">▸ {step.objective}</p>
-                  {!state.tutorial.completed && step.advance === 'next' && (
-                    <button className={`${primary} shrink-0 bg-cyan-600 shadow-none hover:bg-cyan-500`} onClick={() => act({type: 'tutorial.next'})}>
-                      Next
-                    </button>
-                  )}
-                </div>
-              </div>
-            </section>
-          ) : (
-            <button className="flex min-h-11 w-full items-center gap-2 rounded-full border border-cyan-500/50 bg-[#061319] py-1 pl-1 pr-3 text-left" onClick={() => setRiderMode('open')} aria-label="Show General Rider">
-              <img src="/guide/rider-portrait.webp" alt="" className="h-9 w-9 rounded-full border border-cyan-400/80 object-cover" />
-              <span className="truncate text-[13px] font-semibold text-cyan-100">▸ {step.objective}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      <main className="relative min-h-0 flex-1">
-        {scene === 'world' ? (
-          <SectorMap
+    <div className="sbx-root fixed inset-0 overflow-hidden bg-[#0a0906] text-neutral-200">
+      {scene === 'world' ? (
+        <div className="fixed inset-0">
+          <WorldView
             state={state}
             now={now}
             roundMs={ROUND_MS}
-            selectedSite={state.selectedSite}
             pulseSite={want === 'site.select' ? patrolId : null}
+            account={accountButton}
+            march={line}
+            bottomInset={bottomInset}
             onSelectSite={(id) => act({type: 'site.select', siteId: id})}
-            onBaseTap={() => setScene('base')}
+            renderAction={attackFor}
+            onOpenBase={() => setScene('base')}
+            onOpenSquads={() => {
+              setScene('base');
+              setSquadView('Alpha');
+              setSheet('squad');
+            }}
+            onOpenReports={() => setSheet('reports')}
+            onRecall={() => act({type: 'march.recall'})}
+            onSkip={() => act({type: 'clock.skipMarch'})}
+            notice={
+              <p className="pointer-events-none rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
+                Temporary art: robots, Dominion machines, kit
+              </p>
+            }
+            overlay={
+              <>
+                {frame?.result && e && (
+                  <div className="pointer-events-none absolute inset-x-0 top-[38%] z-10 flex flex-col items-center gap-1 px-4">
+                    <p className={`sbx-banner rounded-lg border-2 px-6 py-2 text-center text-[24px] font-extrabold uppercase tracking-widest shadow-2xl ${e.status === 'won' ? 'border-amber-300 bg-amber-950/90 text-amber-100' : 'border-red-400 bg-red-950/90 text-red-100'}`} style={{['--dur' as string]: '2600ms'}}>
+                      {e.status === 'won' ? 'Victory' : e.withdrew ? 'Withdrawn' : 'Defeat'}
+                    </p>
+                    <p className="sbx-banner rounded bg-black/70 px-2 text-[13px] font-semibold text-neutral-100" style={{['--dur' as string]: '2600ms'}}>
+                      {e.kills}/{e.enemiesStart.length} Dominion machines destroyed
+                    </p>
+                  </div>
+                )}
+
+              </>
+            }
           />
-        ) : (
-          <HomeBase state={state} highlight={baseHighlight} onOpen={openBase} />
-        )}
-
-        {/* Victory / Defeat */}
-        {scene === 'world' && frame?.result && e && (
-          <div className="pointer-events-none absolute inset-x-0 top-[38%] z-10 flex flex-col items-center gap-1 px-4">
-            <p className={`sbx-banner rounded-lg border-2 px-6 py-2 text-center text-[24px] font-extrabold uppercase tracking-widest shadow-2xl ${e.status === 'won' ? 'border-amber-300 bg-amber-950/90 text-amber-100' : 'border-red-400 bg-red-950/90 text-red-100'}`} style={{['--dur' as string]: '2600ms'}}>
-              {e.status === 'won' ? 'Victory' : e.withdrew ? 'Withdrawn' : 'Defeat'}
-            </p>
-            <p className="sbx-banner rounded bg-black/70 px-2 text-[13px] font-semibold text-neutral-100" style={{['--dur' as string]: '2600ms'}}>
-              {e.kills}/{e.enemiesStart.length} Dominion machines destroyed
-            </p>
-          </div>
-        )}
-
-        {/* Honest label: the robot troops, Dominion machines and fitted kit on the map are provisional. */}
-        {scene === 'world' && (
-          <p className="pointer-events-none absolute right-2 top-2 z-10 max-w-[40%] rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-right text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
-            Temporary art: robots, Dominion machines, fitted kit
-          </p>
-        )}
-
-        {toast && (
-          <p
-            key={toast.key}
-            role="status"
-            className={`absolute inset-x-3 bottom-2 z-30 mx-auto max-w-xl rounded-md border px-3 py-2 text-center text-[13px] font-medium shadow-xl ${toast.error ? 'border-red-800 bg-red-950/95 text-red-100' : 'border-emerald-800 bg-emerald-950/95 text-emerald-100'}`}
-          >
-            {toast.text}
-          </p>
-        )}
-
-        {scene === 'world' && selected && !m && (
-          <div key={selected.id} className="contents">
-          <TargetCard
-            state={state}
-            siteId={selected.id}
-            attention={want === 'march.start'}
-            onClose={() => act({type: 'site.select', siteId: null})}
-            onMarch={(robots, assets) => act({type: 'march.start', siteId: selected.id, robots, assets})}
-          />
-          </div>
-        )}
-      </main>
-
-      <div className="z-20">
-        <Comms />
-      </div>
-
-      {/* What is happening, and where to go. */}
-      <nav className="z-20 bg-[#0d0b08]/95 px-2 pt-1.5 backdrop-blur" style={{paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.4rem)'}}>
-        <div className="mx-auto max-w-xl space-y-1.5">
-          {m && (
-            <div className="flex items-center gap-2 rounded-md border border-neutral-800 bg-black/40 px-2 py-1">
-              <div className="min-w-0 flex-1 text-[13px]">
-                <p className="truncate font-semibold text-neutral-100">
-                  {m.phase === 'outbound' && `Marching on ${siteLabel(findSite(state, m.siteId)?.kind ?? 'patrol')} · ${clock(m.arriveAt - now)}`}
-                  {m.phase === 'engaged' && (frame && !frame.over ? `Attacking · round ${frame.round + 1} of ${e!.rounds.length}` : 'Battle over')}
-                  {m.phase === 'holding' && `Holding ${siteLabel(findSite(state, m.siteId)?.kind ?? 'patrol')} · ${clock((m.holdUntil ?? now) - now)}`}
-                  {m.phase === 'returning' && `Returning to base · ${clock((m.returnAt ?? now) - now)}`}
-                </p>
-                {m.phase === 'returning' && m.outcome && <p className="text-[11px] text-neutral-400">{m.outcome === 'won' ? 'Victory' : m.outcome === 'lost' ? 'Defeat: damaged units are coming home' : m.outcome === 'held' ? 'Hold complete, reward banked' : 'Recalled, no reward'}</p>}
+        </div>
+      ) : (
+        <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <SandboxBaseBoard state={state} onOpen={openEntry} bottomInset={bottomInset} />
+          {/* The live base header (LiveApp.tsx): account left, the clock between, World map right. */}
+          <header className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-2 px-3" style={{paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)'}}>
+            <div className="pointer-events-auto flex w-24 items-center">{accountButton}</div>
+            <div className="pointer-events-none flex flex-col items-center gap-1">
+              <div data-guide="clock" className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
+                <GameClock />
               </div>
-              {(m.phase === 'outbound' || m.phase === 'holding') && (
-                <button className={secondary} onClick={() => act({type: 'march.recall'})}>
-                  Recall
-                </button>
-              )}
-              {scene === 'base' && (
-                <button className={secondary} onClick={() => setScene('world')} aria-label="Watch on the World Map">
-                  Map ›
-                </button>
-              )}
-              {m.phase !== 'engaged' ? (
-                <button className={testButton} onClick={() => act({type: 'clock.skipMarch'})} aria-label="Test clock: skip ahead">
-                  Test ⏩
-                </button>
-              ) : (
-                frame &&
-                !frame.over && (
-                  <button className={testButton} onClick={() => act({type: 'clock.skipMarch'})} aria-label="Test clock: skip the fight">
-                    Test ⏩
-                  </button>
-                )
-              )}
+              <span className="whitespace-nowrap rounded border border-amber-700/70 bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-300 backdrop-blur" data-testid="base-practice">
+                Practice sandbox
+              </span>
             </div>
-          )}
-          <div className="grid grid-cols-5 gap-1">
-            <SceneTab label="Home Base" active={scene === 'base'} art={<BoardThumb />} badge={needsBay || needsHangar ? '!' : null} pulse={!!baseHighlight && baseHighlight !== 'world' && scene !== 'base'} onClick={() => setScene('base')} />
-            <SceneTab label="World Map" active={scene === 'world'} art={<PropThumb name="hardy_tree_b" />} badge={m ? '•' : null} pulse={wantWorld && scene !== 'world'} onClick={() => setScene('world')} />
-            <SceneTab label="Events" ariaLabel="Season 1 Events" active={sheet === 'season'} art={<img src="/guide/rider-portrait.webp" alt="" className="h-full w-full object-cover object-top" />} onClick={() => setSheet('season')} />
-            <SceneTab label="Operations" active={sheet === 'ops'} art={<img src="/base/building-depot.webp" alt="" className="h-full w-full object-contain" />} pulse={want === 'ops.cache'} onClick={() => setSheet('ops')} />
-            <SceneTab label="Reports" ariaLabel="Reports: record and test controls" active={sheet === 'more'} art={<img src="/base/building-signals-center.webp" alt="" className="h-full w-full object-contain" />} onClick={() => setSheet('more')} />
+            <button onClick={() => setScene('world')} data-guide="world-map" className="pointer-events-auto min-h-11 rounded bg-neutral-800/90 px-3 py-2 text-sm font-medium text-neutral-100 shadow backdrop-blur transition hover:bg-neutral-700">
+              {t('nav.worldMap')}
+            </button>
+          </header>
+        </div>
+      )}
+
+      {notice && (
+        <p className="fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] z-[46] mx-auto flex max-w-xl items-center gap-2 rounded-md border border-amber-700 bg-amber-950/95 px-3 py-1 text-[13px] text-amber-100" role="status">
+          <span className="flex-1">{notice}</span>
+          <button className="min-h-11 px-2 underline" onClick={() => setNotice(null)}>
+            OK
+          </button>
+        </p>
+      )}
+
+      {toast && (
+        <p
+          key={toast.key}
+          role="status"
+          className={`pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.5rem)] z-[47] mx-auto max-w-xl rounded-md border px-3 py-2 text-center text-[13px] font-medium shadow-xl ${toast.error ? 'border-red-800 bg-red-950/95 text-red-100' : 'border-emerald-800 bg-emerald-950/95 text-emerald-100'}`}
+        >
+          {toast.text}
+        </p>
+      )}
+
+      {!state.tutorial.completed && (
+        <SandboxGuide
+          text={tutorialSay(step)}
+          counter={`${state.tutorial.step + 1}/${TUTORIAL.length}`}
+          objective={step.objective}
+          canNext={step.advance === 'next'}
+          highlight={highlight}
+          hidden={inSheet}
+          onNext={() => act({type: 'tutorial.next'})}
+          onSkip={() => act({type: 'tutorial.skip'})}
+          onHeight={setGuideH}
+        />
+      )}
+
+      <Comms onOpenChange={setCommsOpen} />
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-[55]" onMouseDown={(ev) => ev.target === ev.currentTarget && setMenuOpen(false)}>
+          <div className="absolute right-3 w-64 shadow-2xl" style={{top: 'calc(env(safe-area-inset-top) + 3.75rem)'}}>
+            <AccountPanel
+              state={state}
+              week={week}
+              day={day}
+              level={lvl.level}
+              onOpen={(k) => {
+                setMenuOpen(false);
+                setSheet(k);
+              }}
+            />
           </div>
         </div>
-      </nav>
-
+      )}
       {report && !ceremony && !refit && <BattleReport state={state} onDone={() => act({type: 'battle.seen'})} />}
 
       {ceremony && (
@@ -515,13 +505,28 @@ export default function Sandbox() {
           />
         </Sheet>
       )}
+      {sheet === 'squad' && (
+        <Sheet title={`Task Force ${squadView}`} onClose={() => setSheet(null)}>
+          <SquadSetup
+            state={state}
+            squad={squadView}
+            onSet={(robots, assets) => act({type: 'squad.set', robots, assets})}
+            onRepairs={() => setSheet('repair')}
+          />
+        </Sheet>
+      )}
+      {sheet === 'reports' && (
+        <Sheet title={t('map.reports')} onClose={() => setSheet(null)}>
+          <Reports state={state} />
+        </Sheet>
+      )}
       {sheet === 'ops' && (
         <Sheet title="Operations" onClose={() => setSheet(null)}>
           <Operations state={state} now={now} onAct={act} />
         </Sheet>
       )}
       {sheet === 'more' && (
-        <Sheet title="Command Center · Reports" onClose={() => setSheet(null)}>
+        <Sheet title="Command Center" onClose={() => setSheet(null)}>
           <More
             state={state}
             now={now}
@@ -536,99 +541,6 @@ export default function Sandbox() {
           />
         </Sheet>
       )}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Target card and force picker                                               */
-/* -------------------------------------------------------------------------- */
-
-function TargetCard({state, siteId, attention, onClose, onMarch}: {state: SandboxState; siteId: string; attention: boolean; onClose: () => void; onMarch: (robots: Role[], assets: string[]) => void}) {
-  const site = findSite(state, siteId)!;
-  const readyRobots = ROLES.filter((r) => state.robots[r].status === 'ready');
-  const readyAssets = state.assets.filter((a) => a.status === 'ready').map((a) => a.assetId);
-  const [robots, setRobots] = useState<Role[]>(readyRobots);
-  const [assets, setAssets] = useState<string[]>(readyAssets);
-  const done = state.cleared.includes(site.id);
-  const enemies = siteEnemies(site, state);
-  const ours = forceTotals(state, robots, assets);
-  const theirs = enemyTotals(enemies, siteStrength(site, state));
-  const reward = siteReward(site, state);
-  const spec = site.kind === 'patrol' || site.kind === 'rival_base' ? null : EXERCISES[site.kind];
-  const toggle = <T,>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
-  const counts = enemies.reduce<Record<string, number>>((acc, x) => ({...acc, [x.kind]: (acc[x.kind] ?? 0) + 1}), {});
-
-  return (
-    <div className="absolute inset-x-2 bottom-2 z-20 mx-auto max-h-[70%] max-w-xl overflow-y-auto rounded-xl border border-neutral-700 bg-[#0d0b08]/96 p-3 shadow-2xl" role="dialog" aria-label={siteLabel(site.kind)}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[16px] font-bold text-neutral-100">{siteLabel(site.kind)}</p>
-          <p className="text-[12px] uppercase tracking-wide text-neutral-400">{site.battle ? 'Battle' : 'March and hold'} · march {marchSeconds(site)} s{done ? ' · done today' : ''}</p>
-        </div>
-        <button className={secondary} onClick={onClose}>
-          Close
-        </button>
-      </div>
-      <p className="mt-1 text-[13px] leading-snug text-neutral-300">
-        {spec ? `${spec.blurb} ${spec.action}.` : site.kind === 'patrol' ? 'A Dominion patrol loose on the flats. It grows stronger after every win. Test-only enemies and reward.' : 'A simulated rival commander base for practising a base attack. Not a real player: kills are training kills, confirmed PvP stays 0, and it pays nothing because base-attack loot is not decided.'}
-      </p>
-      <p className="mt-1 text-[13px] text-amber-200">{reward ? `Reward: ${describeReward(reward)}` : 'Reward: none (practice mock)'}</p>
-
-      {site.battle && (
-        <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
-          <div className="rounded border border-cyan-900 bg-cyan-950/30 p-2">
-            <p className="font-semibold text-cyan-200">Your Task Force</p>
-            <p className="font-mono text-neutral-200">HP {ours.hp} · firepower {ours.firepower}/round</p>
-          </div>
-          <div className="rounded border border-red-900 bg-red-950/30 p-2">
-            <p className="font-semibold text-red-200">{Object.entries(counts).map(([k, n]) => `${n} ${k === 'walker' ? 'Walker' : 'Crawler'}${n > 1 ? 's' : ''}`).join(', ')}</p>
-            <p className="font-mono text-neutral-200">HP {theirs.hp} · firepower {theirs.firepower}/round</p>
-          </div>
-          <p className="col-span-2 text-[11px] text-neutral-500">Plain totals, not a prediction: the Scout's mark, the Support's repairs and who gets targeted decide the fight.</p>
-        </div>
-      )}
-
-      <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-neutral-400">Robot troops</p>
-      <div className="mt-1 grid grid-cols-3 gap-1.5">
-        {ROLES.map((r) => {
-          const robot = state.robots[r];
-          const ok = robot.status === 'ready';
-          const on = robots.includes(r);
-          return (
-            <button key={r} disabled={!ok} aria-pressed={on} onClick={() => setRobots(toggle(robots, r))} className={`flex min-h-11 flex-col items-center rounded-md border px-1 py-1 text-[12px] disabled:opacity-40 ${on ? 'border-cyan-400 bg-cyan-950/50' : 'border-neutral-700 bg-neutral-900'}`}>
-              <RobotFigure role={r} parts={partsAt(robot.level)} height={46} status={robot.status === 'destroyed' || robot.status === 'disabled' ? robot.status : 'ready'} />
-              <span className="font-semibold">
-                {CONFIG.roles[r].label} <span className="font-mono text-[11px]">Lv {robot.level}</span>
-              </span>
-              <span className="text-[11px] text-neutral-400">{ok ? `${Math.round(robot.hp)}/${robotStats(r, robot.level).maxHp} HP` : robot.status}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-neutral-400">Assets</p>
-      <div className="mt-1 grid grid-cols-3 gap-1.5">
-        {state.assets.map((a) => {
-          const asset = assetOf(a.assetId);
-          const ok = a.status === 'ready';
-          const on = assets.includes(a.assetId);
-          const url = assetArtUrl(a.assetId, a.rank);
-          return (
-            <button key={a.assetId} disabled={!ok} aria-pressed={on} onClick={() => setAssets(toggle(assets, a.assetId))} className={`flex min-h-11 flex-col items-center rounded-md border px-1 py-1 text-[12px] disabled:opacity-40 ${on ? 'border-cyan-400 bg-cyan-950/50' : 'border-neutral-700 bg-neutral-900'}`}>
-              {url && <img src={url} alt="" className="h-11 w-11 object-contain" />}
-              <span className="font-semibold">{asset?.name}</span>
-              <span className="text-[11px] text-neutral-400">{ok ? `R${a.rank} · ${Math.round(a.hp)}/${assetStats(a).maxHp} HP${isDrone(a.assetId) ? ' · drone' : ''}` : a.status}</span>
-            </button>
-          );
-        })}
-      </div>
-      <button
-        className={`${primary} mt-3 w-full text-[16px]${attention ? ' sbx-attention' : ''}`}
-        disabled={done || robots.length === 0 || !assets.some(isDrone)}
-        onClick={() => onMarch(robots, assets)}
-      >
-        {done ? 'Done today' : robots.length === 0 ? 'Pick at least one robot troop' : !assets.some(isDrone) ? 'A Task Force needs its drone' : site.battle ? `Attack · ${robots.length + assets.length} units` : `March · ${robots.length + assets.length} units`}
-      </button>
     </div>
   );
 }

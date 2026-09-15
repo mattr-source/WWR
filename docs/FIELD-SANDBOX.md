@@ -84,49 +84,50 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
     day, +5,000 test supplies, "finish now" on jobs, a look-preview slider for levels 1 to 50 (changes nothing),
     and Reset.
 
-## Scenes: Home Base and World Map (2026-09-15)
+## Two views: Matt's original World and base layouts (2026-09-15)
 
-The sandbox has two scenes, like the live game. The current one is in the URL hash (`#base`, the default, or
-`#world`), so a reload lands on the same view and no second storage key is needed.
+Matt's direction: two views, the world view and the base view he had already built, with the same layout,
+buttons and Comms layout, merged with the sandbox systems. The sandbox therefore ports the live presentation
+into `src/sandbox/original/` (the sandbox may not import `src/live` or `src/net`, so these are ports, checked
+against the live files by `tools/tests/sandboxScenes.test.ts`). The view is in the URL hash: no hash or `#world`
+opens the World view (the live game opens on the map), `#base` the base.
 
-- **Home Base** (`src/sandbox/HomeBase.tsx`) draws the live base from `shared/base.ts`: `board-v5.webp`, the
-  nineteen pads, all fifteen building and vehicle arts at their default pads (`resolvePlacements([])`), the
-  Command Center box painted into the board and the four Task Force slabs. It does not use
-  `src/live/BaseBoard.tsx`, which talks to the server. What each building does is in `src/sandbox/baseRoles.ts`:
+| Live source | Sandbox port | What is the same | What differs, and why |
+|---|---|---|---|
+| `src/live/WorldMap.tsx` HUD | `original/WorldView.tsx` | Task Forces (grid icon) top-left; world card with RST clock; account portrait and **My base** top-right; **Task forces out** with **Recall** under them; bottom column: selection panel, **+ / −** left, **Reports** and **Home** right; same classes and English strings | The map under it is the practice sector (`SectorMap.tsx` on the live terrain), not the pannable server world: + / − and Home zoom that sector. Test ⏩ sits in Task forces out. Controls lift above General Rider so nothing is covered. |
+| World map bases (`skins.ts`, `skinArt.ts`, `drawNameplate`) | `worldSkins.tsx` | Base **skin** art, bottom-anchored, fill 1.12, overhang 0.25; the callsign **nameplate** along the bottom (orange for you) | SVG instead of canvas. Practice base: the default starter skin; mock rival: another starter. Never an exclusive. |
+| `src/live/BaseBoard.tsx` | `original/SandboxBaseBoard.tsx` | Painting covers the screen and pans; buildings at their pads with no permanent labels; one tap names a building, a second tap opens it; Command Center hit box; four Task Force slabs | Default placements; press-and-hold says moving buildings needs the server; slabs read the practice Task Force. |
+| `src/live/LiveApp.tsx` base header | `Sandbox.tsx` | Account left, RST clock centre, **World map** right | A "Practice sandbox" chip under the clock. |
+| `src/live/Chat.tsx` | `Comms.tsx` | Pinned bottom COMMS bar; full-screen panel with header, Close, Server/Alliance/Leadership/Private tabs, Private tab rows, composer | Offline: no channels, so tabs lock as live chat locks a channel-less tab; inputs and Send disabled; an offline notice. No messages invented. |
+| `src/live/guide/Guide.tsx` | `original/SandboxGuide.tsx` | Portrait bottom-left above Comms, bubble with Next / Skip tour, ✕ folds to the portrait, cyan pulse on the step's target, steps aside while a sheet is open | Drives the sandbox tutorial, saved locally. |
+| `src/live/Squads.tsx` Task Force card | `original/SandboxPanels.tsx` `SquadSetup` | Name, slots-filled bar, drone line, 3×2 slot grid, repair button; opened from the Task Force slab at the bottom of the base | Six slots are the practice robots and Assets; a tap sends a unit or keeps it home. No band labels (positions are not used by practice battles). |
+| `PlayerPanel` in `LiveApp.tsx` | `AccountPanel` | Portrait and name, two-column readout, list of doors | Readout is practice supplies and test Credits; profile, customise, alliance, settings and sign out need the server and are not offered. |
 
-  | Building | Opens |
-  |---|---|
-  | Fabrication Shop | Robot Bay (robots, Field Workshop) |
-  | Materials Recovery Yard | Repairs: every damaged robot and Asset with its art, repair or remanufacture |
-  | Armour / Rotary / Drone buildings | Hangar at the Abrams / Hind / Global Hawk, upgrades open |
-  | Tactical Operations Center | Season 1 Events hub (below) |
-  | Signals Center, Command Center | Reports (Task Force, service record, test controls) |
-  | Task Force Alpha slab | World Map |
-  | All other buildings, Task Forces Bravo to Delta | A plain "no function in the practice sandbox" sheet with the art |
+**Squads (Matt):** "squads when they attack are simple one click and attack button appears and they go. The
+squads are setup inside the base view at the bottom." The line-up is set on the **Task Force Alpha slab** (saved
+in the practice save as `squad`; older saves without it mean the whole Task Force). On the World view a tap on a
+target shows **Attack** in the selection panel; pressing it marches the line-up's ready units. If nothing can go,
+the panel says why (no ready robot, no ready drone, already out). No chooser sheet on the map.
 
-- **World Map** (`src/sandbox/SectorMap.tsx` over `src/sandbox/worldGround.ts`): the sector map, targets, march,
-  attack and return now stand on the live Season 1 ground. `worldGround.ts` runs the real generator
-  (`shared/terrain.ts` `groundAt`, `shared/terrainProps.ts` `propsInPlot`, the prop atlas) and ports the painting
-  arithmetic of `src/live/terrainPaint.ts` (which the sandbox may not import). Practice world id 1, season 1, home
-  plot (34, 22). Props are kept off targets, the base and the Task Force. The home-base marker on the map goes back
-  to Home Base.
-- **Navigation:** bottom tabs with art (board crop, terrain prop, General Rider, depot, Signals Center): Home Base,
-  World Map, Events, Operations, Reports. The HUD has an Events button. The march strip shows on both scenes, with "Map ›" from the base.
-- **Mobile layout rules** (2026-09-15 review fixes, checked by `wwr-e2e-layout.cjs`):
-  - General Rider is docked between the HUD and the scene, never over it. Expanded, collapsed or after Skip,
-    no building, map target or tab is covered, and the tutorial is never skipped for you.
-  - Board labels are short names (full names stay in the accessible name and sheets), at most two lines and
-    never wider than their building. The Command Center has one chip.
-  - The Home Base temporary-art notice is its own row above the board. On the World Map it stays top right.
-  - Sheets keep an opaque title bar outside the scrolling body.
-- **Comms** (`src/sandbox/Comms.tsx`): the live Comms bar and full-screen panel look with the tabs from
-  `shared/chat.ts`, shown **offline**: "Comms is offline in the practice sandbox", no messages, input and Send
-  disabled. It imports only `react` and `shared/chat.ts`.
+**Where each sandbox system lives now:**
+
+| System | Reached from |
+|---|---|
+| Robot Bay, Field Workshop | Base Fabrication Shop |
+| Repairs | Base Materials Recovery Yard; the line-up's repair button |
+| Hangar (Asset ranks, packages, refits) | Base Armour / Helicopter / Drone buildings (Missile and Fixed-Wing: no practice Asset) |
+| Season 1 Events hub, then Operations | Base Tactical Operations Center; account menu |
+| Command Center (record, test controls) | Base Command Center; account menu |
+| Battle reports | World **Reports** |
+| Attack, march, battle, return | World: tap target, Attack; Task forces out |
+
+Removed from the earlier sandbox build: the invented five-tab bottom bar, the HUD Events button, the always-labelled
+Home Base board, the docked Rider strip and the force-picker target card.
 
 ## Season 1 Events hub (2026-09-15)
 
-`src/sandbox/SeasonHub.tsx` over the pure model `src/sandbox/seasonHub.ts`. Opened from the Tactical Operations
-Center, the HUD Events button and the Events tab.
+`src/sandbox/SeasonHub.tsx` over the pure model `src/sandbox/seasonHub.ts`. An overlay, not a third view: opened
+from the base's Tactical Operations Center (where the live game keeps Events) and the account menu.
 
 - **Banner:** "Mech Uprising — Iron Dominion" (`SEASON_1_NAME`), practice week N/10 with its chapter name, story
   beat and featured play, the phase by the live `seasonPhase` rule, and the live Season 1 calendar week and
@@ -162,9 +163,11 @@ Center, the HUD Events button and the Events tab.
 | `src/sandbox/RobotFigure.tsx` | Robot troops and Dominion machines as layered vector parts (**temporary art**). |
 | `src/sandbox/RefitArt.tsx`, `RefitCeremony.tsx` | Asset kit modules, rank plates and Workshop fittings (**temporary prototype art**), and the install ceremony for Asset and Workshop upgrades. |
 | `src/sandbox/Sandbox.tsx` | The screen: HUD, Rider, scene switch, target card, battle report, Hangar, Operations, record, test controls. |
-| `src/sandbox/HomeBase.tsx`, `baseRoles.ts` | Home Base scene on the live board; what each building opens. |
+| `src/sandbox/original/*` | Ports of the live World HUD, base board, guide, squad card and account panel (see Two views). |
+| `src/sandbox/baseRoles.ts` | What each base building opens in the sandbox. |
+| `src/sandbox/worldSkins.tsx` | Base skins with nameplates on the World view. |
 | `src/sandbox/worldGround.ts` | Live Season 1 terrain painted under the World Map. |
-| `src/sandbox/BasePanels.tsx` | Scene tabs, building-art cards, Repairs, the no-function building sheet. |
+| `src/sandbox/BasePanels.tsx` | Building-art cards, Repairs, the no-function building sheet. |
 | `src/sandbox/Comms.tsx` | Offline Comms bar and panel. |
 | `src/sandbox/SeasonHub.tsx`, `seasonHub.ts` | Season 1 Events hub and its pure model. |
 

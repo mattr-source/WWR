@@ -38,7 +38,8 @@ import {
 import {PROP_ATLAS_H, PROP_ATLAS_SRC, PROP_ATLAS_W, PROP_FRAMES} from '../../shared/terrainAtlas';
 import {type BattleFrame, type Fx, type FxRef, battleFrame} from './beats';
 import {DominionFigureGroup, FIGURE_VIEWBOX, DOMINION_VIEWBOX, RobotFigureGroup} from './RobotFigure';
-import {AssetKitGroup, KIT_VIEWBOX, WORKSHOP_VIEWBOX, WorkshopFittingsGroup} from './RefitArt';
+import {AssetKitGroup, KIT_VIEWBOX} from './RefitArt';
+import {PRACTICE_SKIN, RIVAL_SKIN, SkinBase} from './worldSkins';
 import {clearPlots, paintWorldGround} from './worldGround';
 
 export const VIEW_W = 360;
@@ -87,25 +88,12 @@ const Defs = memo(function Defs() {
 /* Base                                                                       */
 /* -------------------------------------------------------------------------- */
 
-const Base = memo(function Base({workshopLevel, busy}: {workshopLevel: number; busy: boolean}) {
-  const sx = 132 / WORKSHOP_VIEWBOX.width;
-  const sy = 85 / WORKSHOP_VIEWBOX.height;
+/** The practice base on the map: its base skin with the commander's nameplate, as the live map draws a base. */
+const Base = memo(function Base({name}: {name: string}) {
   return (
     <g aria-hidden="true">
-      <ellipse cx={BASE_AT.x} cy={560} rx={170} ry={46} fill="#8f8163" opacity="0.35" />
-      {/* Matt's base building art (shared/base.ts). */}
-      <image href="/base/building-fabrication-shop.webp" x={52} y={496} width={132} height={85} />
-      {/* Every Workshop level-up leaves its fitting on the building (temporary prototype art). */}
-      <g transform={`translate(52 496) scale(${sx} ${sy})`}>
-        <WorkshopFittingsGroup level={workshopLevel} />
-      </g>
-      <image href="/base/building-recovery-yard.webp" x={190} y={500} width={124} height={80} />
-      {busy && (
-        <g className="sbx-weld">
-          <path d="M112 548 l-8 -6 M116 544 l2 -10 M120 548 l9 -5" stroke="#ffe08a" strokeWidth="2" strokeLinecap="round" />
-        </g>
-      )}
-      <Chip x={184} y={582} text={`HOME BASE · WORKSHOP LV ${workshopLevel}`} tone="#f5d28a" />
+      <ellipse cx={BASE_AT.x} cy={586} rx={70} ry={14} fill="#3c2d1c" opacity="0.22" />
+      <SkinBase skin={PRACTICE_SKIN} cx={BASE_AT.x} footY={596} size={92} name={name} isYou />
     </g>
   );
 });
@@ -289,7 +277,6 @@ export default function SectorMap({state, now, roundMs, selectedSite, pulseSite,
   const marchSite = m ? findSite(state, m.siteId) : null;
   const e = state.encounter && m && state.encounter.marchId === m.id ? state.encounter : null;
   const frame: BattleFrame | null = e && m?.phase === 'engaged' ? battleFrame(e, now, roundMs) : null;
-  const upgrading = Object.values(state.robots).some((r) => r.status === 'upgrading') || !!state.workshop.job;
 
   // Units at home (not on the march).
   const homeRobots = (Object.keys(state.robots) as Role[]).filter((r) => !m || !m.robots.includes(r));
@@ -316,8 +303,8 @@ export default function SectorMap({state, now, roundMs, selectedSite, pulseSite,
         />
       )}
 
-      <g onClick={onBaseTap} style={{cursor: 'pointer'}} role="button" aria-label="Your home base: go to the Home Base view">
-        <Base workshopLevel={state.workshop.level} busy={upgrading} />
+      <g onClick={onBaseTap} style={{cursor: 'pointer'}} role="button" aria-label="Your home base: go to the Home Base view" data-guide="map-home-base">
+        <Base name={state.company.name} />
       </g>
 
       {/* Today's targets. */}
@@ -409,9 +396,7 @@ function SiteMarker({state, site, selected, pulse, engaged, onSelect}: {state: S
       {(selected || pulse) && <ellipse className="sbx-pulse" cx={site.x} cy={site.y + 12} rx="54" ry="21" fill="none" stroke="#67e8f9" strokeWidth="3" />}
       {site.kind === 'rival_base' && (
         <g>
-          <image href="/base/building-garrison-barracks.webp" x={site.x - 48} y={site.y - 58} width={96} height={62} />
-          <path d={`M${site.x + 36} ${site.y - 54} v-22`} stroke="#2a2618" strokeWidth="2" />
-          <path d={`M${site.x + 36} ${site.y - 76} h16 l-4 5 l4 5 h-16 Z`} fill="#b91c1c" />
+          <SkinBase skin={RIVAL_SKIN} cx={site.x} footY={site.y + 6} size={76} name="Mock Rival" isYou={false} part="art" />
         </g>
       )}
       {art?.prop && <Prop name={art.prop} x={site.x + (site.battle ? 30 : 0)} y={site.y + 14} w={art.w} />}
@@ -421,6 +406,7 @@ function SiteMarker({state, site, selected, pulse, engaged, onSelect}: {state: S
           <EnemySprite kind={x.kind} x={layout[x.id].x} y={layout[x.id].y} dead={false} />
         </g>
       ))}
+      {site.kind === 'rival_base' && <SkinBase skin={RIVAL_SKIN} cx={site.x} footY={site.y + 6} size={76} name="Mock Rival" isYou={false} part="plate" />}
       <Chip x={site.x} y={site.y + 32} text={label} tone={site.battle ? '#ffb4a8' : '#f5d28a'} />
     </g>
   );

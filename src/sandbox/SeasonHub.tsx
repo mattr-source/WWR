@@ -1,7 +1,7 @@
 /**
  * The Season 1 hub: Mech Uprising — Iron Dominion, as the practice sandbox
  * can truthfully show it. Opened from the Tactical Operations Center (as the
- * live game's Events are) and from the HUD Events button.
+ * live game's Events are) and from the account menu.
  *
  * Built from existing art only: the Tactical Operations Center and Signals
  * Center buildings, General Rider, the Asset renders, the Alliance Convoy

@@ -200,6 +200,12 @@ export type Refit =
   | {kind: 'asset-package'; assetId: string; pkg: PackageKey; from: number; to: number; rank: number; at: number}
   | {kind: 'workshop'; from: number; to: number; at: number};
 
+/** Who Task Force Alpha sends when the Attack button is pressed on the map. */
+export interface Squad {
+  robots: Role[];
+  assets: string[];
+}
+
 export interface SandboxState {
   schema: typeof SANDBOX_SCHEMA;
   config: {id: string; version: number};
@@ -214,6 +220,11 @@ export interface SandboxState {
   credits: number;
   workshop: {level: number; job: {toLevel: number; completesAt: number} | null};
   selectedSite: string | null;
+  /**
+   * Task Force Alpha's saved line-up, set on the base (the Task Force slab).
+   * Null - and absent in older saves - means the whole Task Force.
+   */
+  squad?: Squad | null;
   march: March | null;
   marchesLaunched: number;
   /** The latest battle (kept after the march so its report can be read). */
@@ -247,6 +258,7 @@ export type SandboxAction =
   | {type: 'site.select'; siteId: string | null}
   | {type: 'march.start'; siteId: string; robots: Role[]; assets: string[]}
   | {type: 'march.recall'}
+  | {type: 'squad.set'; robots: Role[]; assets: string[]}
   | {type: 'battle.seen'}
   | {type: 'robot.upgrade'; role: Role}
   | {type: 'robot.repair'; role: Role}
@@ -416,6 +428,35 @@ export function nextAssetPackage(a: TaskAsset, pkg: PackageKey, config: SandboxS
 }
 
 export const isDrone = (assetId: string) => assetOf(assetId)?.category === 'drone';
+
+/**
+ * What pressing Attack would send: the saved line-up (or the whole Task Force),
+ * minus anything not ready. `blocked` is the plain reason it cannot go at all.
+ */
+export function squadDeployment(s: SandboxState, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST): {robots: Role[]; assets: string[]; waiting: string[]; blocked: string | null} {
+  const line = s.squad ?? {robots: [...ROLES], assets: s.assets.map((a) => a.assetId)};
+  const robots = line.robots.filter((r) => s.robots[r].status === 'ready' && s.robots[r].hp > 0);
+  const assets = line.assets.filter((id) => {
+    const a = s.assets.find((x) => x.assetId === id);
+    return !!a && a.status === 'ready' && a.hp > 0;
+  });
+  const waiting = [
+    ...line.robots.filter((r) => !robots.includes(r)).map((r) => config.roles[r].label),
+    ...line.assets.filter((id) => !assets.includes(id)).map((id) => assetOf(id)?.name ?? id),
+  ];
+  const blocked = s.march
+    ? 'Task Force Alpha is already out.'
+    : robots.length === 0
+      ? line.robots.length === 0
+        ? 'No robot troops in the line-up. Set it on the Task Force Alpha slab at base.'
+        : 'No robot troop in the line-up is ready. Repair them at base.'
+      : !assets.some(isDrone)
+        ? line.assets.some(isDrone)
+          ? 'The drone is not ready. Repair it at base.'
+          : 'A Task Force marches with its drone. Add it on the Task Force Alpha slab at base.'
+        : null;
+  return {robots, assets, waiting, blocked};
+}
 
 /* -------------------------------------------------------------------------- */
 /* Enemies, rewards, company (TEST-ONLY constants)                            */
@@ -673,6 +714,7 @@ export function createSandbox(now: number, config: SandboxSeasonConfig = SANDBOX
     credits: config.startCredits,
     workshop: {level: 1, job: null},
     selectedSite: null,
+    squad: null,
     march: null,
     marchesLaunched: 0,
     encounter: null,
@@ -755,7 +797,13 @@ export function readSandbox(raw: unknown, config: SandboxSeasonConfig = SANDBOX_
   const seenRefitAt = (s as {seenRefitAt?: unknown}).seenRefitAt ?? null;
   if (lastRefit !== null && !(isObj(lastRefit) && ['asset-rank', 'asset-package', 'workshop'].includes(lastRefit.kind as string) && isNum(lastRefit.at) && isNum(lastRefit.from) && isNum(lastRefit.to))) return no('invalid');
   if (!nullOrNum(seenRefitAt)) return no('invalid');
-  return {state: {...s, robots, assets, lastRefit: lastRefit as Refit | null, seenRefitAt: seenRefitAt as number | null, config: {id: config.id, version: config.version}}, rejected: null};
+  // Added after schema 2 shipped: an absent or unreadable line-up is the whole Task Force, never a reason to drop a save.
+  const rawSquad = (s as {squad?: unknown}).squad;
+  const squad: Squad | null =
+    isObj(rawSquad) && Array.isArray(rawSquad.robots) && Array.isArray(rawSquad.assets)
+      ? {robots: ROLES.filter((r) => (rawSquad.robots as unknown[]).includes(r)), assets: assets.map((a) => a.assetId).filter((id) => (rawSquad.assets as unknown[]).includes(id))}
+      : null;
+  return {state: {...s, robots, assets, squad, lastRefit: lastRefit as Refit | null, seenRefitAt: seenRefitAt as number | null, config: {id: config.id, version: config.version}}, rejected: null};
 }
 
 /** A stored sandbox this build can trust, or null. */
@@ -1263,6 +1311,13 @@ function reduce(s: SandboxState, action: SandboxAction, now: number, config: San
         assets: s.assets.map((a) => (assets.includes(a.assetId) ? {...a, sorties: a.sorties + 1} : a)),
       };
       return done(tutorialOn(lane(next, 'mobilization', now, config), 'march.start', now, config), `Marching on ${siteLabel(site.kind)}: ${seconds} s.`);
+    }
+
+    case 'squad.set': {
+      if (s.march) return fail('Task Force Alpha is out. Change the line-up when it is home.');
+      const robots = ROLES.filter((r) => action.robots.includes(r));
+      const assets = s.assets.map((a) => a.assetId).filter((id) => action.assets.includes(id));
+      return done({...s, squad: {robots, assets}});
     }
 
     case 'march.recall': {

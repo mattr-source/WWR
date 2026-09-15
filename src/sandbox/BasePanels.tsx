@@ -1,5 +1,5 @@
 /**
- * Art-led pieces for the two scenes: the bottom scene tabs, building-art
+ * Art-led pieces for the sandbox sheets: building-art
  * cards for the Operations and Reports panels, the Materials Recovery Yard's
  * repair line-up and the honest sheet for a building with no sandbox job.
  *
@@ -24,11 +24,6 @@ export function buildingArt(id: string): string {
   return BOARD_BUILDINGS.find((b) => b.id === id)?.art ?? BOARD_IMAGE;
 }
 
-/** A crop of the base board painting, for the Home Base tab. */
-export function BoardThumb() {
-  return <span aria-hidden className="block h-full w-full rounded-sm bg-cover" style={{backgroundImage: `url(${BOARD_IMAGE})`, backgroundPosition: '50% 45%', backgroundSize: '160%'}} />;
-}
-
 /** One terrain prop from the live atlas. */
 export function PropThumb({name}: {name: string}) {
   const f = PROP_FRAMES[name];
@@ -49,22 +44,6 @@ export function PropThumb({name}: {name: string}) {
         }}
       />
     </span>
-  );
-}
-
-export function SceneTab({label, ariaLabel, art, active, badge, pulse, onClick}: {label: string; ariaLabel?: string; art: ReactNode; active: boolean; badge?: string | null; pulse?: boolean; onClick: () => void}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={ariaLabel ?? label}
-      aria-current={active ? 'page' : undefined}
-      data-scene-tab={label}
-      className={`relative flex min-h-[3.25rem] flex-col items-center justify-end overflow-hidden rounded-md border px-0.5 pb-0.5 pt-0.5 ${active ? 'border-amber-400 bg-amber-950/50' : 'border-neutral-700 bg-neutral-900/90'}${pulse ? ' sbx-attention' : ''}`}
-    >
-      <span className="block h-8 w-full">{art}</span>
-      <span className={`mt-0.5 block w-full truncate text-center text-[11px] font-semibold leading-tight ${active ? 'text-amber-100' : 'text-neutral-200'}`}>{label}</span>
-      {badge && <span className="absolute right-0.5 top-0.5 rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white">{badge}</span>}
-    </button>
   );
 }
 

@@ -690,7 +690,7 @@ test('isolation: one storage key, a strict import allow-list, and no path to the
     'shared/sandbox.ts': ['./assets', './combat', './economy', './exercises', './repair', './season1Ops', './sandboxSeason', './upgrades'],
     'shared/sandboxSeason.ts': ['./assets', './exercises', './season', './season1Ops'],
   };
-  const SANDBOX_UI = ['react', '../../shared/sandbox', '../../shared/sandboxSeason', '../../shared/upgrades', '../../shared/assets', '../../shared/exercises', '../../shared/season1Ops', '../../shared/assetVisuals', '../../shared/terrainAtlas', '../../shared/allianceConvoyVisuals', './store', './flag', './beats', './Battlefield', './SectorMap', './RobotFigure', './RobotBay', './InstallCeremony', './RefitArt', './RefitCeremony', './refitArt.css', './ui', './sandbox.css', './robotFigure.css'];
+  const SANDBOX_UI = ['react', '../../shared/sandbox', '../../shared/sandboxSeason', '../../shared/upgrades', '../../shared/assets', '../../shared/exercises', '../../shared/season1Ops', '../../shared/assetVisuals', '../../shared/terrainAtlas', '../../shared/allianceConvoyVisuals', '../../shared/base', '../../shared/terrain', '../../shared/terrainProps', '../../shared/chat', './store', './flag', './beats', './Battlefield', './SectorMap', './worldGround', './HomeBase', './baseRoles', './BasePanels', './Comms', './RobotFigure', './RobotBay', './InstallCeremony', './RefitArt', './RefitCeremony', './refitArt.css', './ui', './sandbox.css', './robotFigure.css'];
   const files = ['shared/sandbox.ts', 'shared/sandboxSeason.ts', ...readdirSync(join(root, 'src/sandbox')).filter((f) => /\.tsx?$/.test(f)).map((f) => `src/sandbox/${f}`)];
   for (const file of files) {
     const src = readFileSync(join(root, file), 'utf8');

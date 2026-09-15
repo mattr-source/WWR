@@ -14,7 +14,7 @@
  * the convoy exercise uses the Alliance Convoy truck. Robots and Dominion
  * machines are temporary vector art (RobotFigure.tsx), labelled as such.
  */
-import {type CSSProperties, type ReactNode, memo} from 'react';
+import {type CSSProperties, type ReactNode, memo, useEffect, useRef, useState} from 'react';
 import {convoyTruckUrl} from '../../shared/allianceConvoyVisuals';
 import {assetArtUrl} from '../../shared/assetVisuals';
 import {
@@ -39,6 +39,7 @@ import {PROP_ATLAS_H, PROP_ATLAS_SRC, PROP_ATLAS_W, PROP_FRAMES} from '../../sha
 import {type BattleFrame, type Fx, type FxRef, battleFrame} from './beats';
 import {DominionFigureGroup, FIGURE_VIEWBOX, DOMINION_VIEWBOX, RobotFigureGroup} from './RobotFigure';
 import {AssetKitGroup, KIT_VIEWBOX, WORKSHOP_VIEWBOX, WorkshopFittingsGroup} from './RefitArt';
+import {clearPlots, paintWorldGround} from './worldGround';
 
 export const VIEW_W = 360;
 export const VIEW_H = 600;
@@ -54,45 +55,6 @@ const ROBOT_H = 36;
 /* Ground                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function stream(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const CRACKS = (() => {
-  const r = stream(2207);
-  return Array.from({length: 34}, () => {
-    let x = -60 + r() * 480;
-    let y = -20 + r() * 640;
-    let d = `M${x.toFixed(0)} ${y.toFixed(0)}`;
-    for (let s = 0; s < 3 + Math.floor(r() * 3); s += 1) {
-      x += (r() - 0.5) * 50;
-      y += (r() - 0.4) * 30;
-      d += ` L${x.toFixed(0)} ${y.toFixed(0)}`;
-    }
-    return d;
-  });
-})();
-
-/** Terrain props from the live atlas, placed clear of targets, routes and the base. */
-const PROPS: Array<{name: string; x: number; y: number; w: number}> = [
-  {name: 'boulder_cluster_a', x: 336, y: 180, w: 58},
-  {name: 'thorn_brush_a', x: 22, y: 232, w: 44},
-  {name: 'dry_grass_a', x: 240, y: 96, w: 46},
-  {name: 'scrap_pile_b', x: 336, y: 486, w: 52},
-  {name: 'hardy_tree_c', x: 18, y: 430, w: 50},
-  {name: 'sandstone_shelf_b', x: 118, y: 62, w: 70},
-  {name: 'thorn_brush_c', x: 214, y: 330, w: 38},
-  {name: 'dry_grass_b', x: 350, y: 372, w: 44},
-  {name: 'boulder_cluster_a', x: 30, y: 590, w: 50},
-];
-
 function Prop({name, x, y, w, opacity = 1}: {name: string; x: number; y: number; w: number; opacity?: number}) {
   const f = PROP_FRAMES[name];
   if (!f) return null;
@@ -107,34 +69,17 @@ function Prop({name, x, y, w, opacity = 1}: {name: string; x: number; y: number;
   );
 }
 
-const Ground = memo(function Ground() {
+/** Shared SVG filters. The ground itself is the live terrain, painted on a canvas underneath (worldGround.ts). */
+const Defs = memo(function Defs() {
   return (
-    <g aria-hidden="true">
-      <defs>
-        <radialGradient id="sm-ground" cx="0.5" cy="0.55" r="0.8">
-          <stop offset="0" stopColor="#d9cdae" />
-          <stop offset="0.7" stopColor="#c7b894" />
-          <stop offset="1" stopColor="#a8986f" />
-        </radialGradient>
-        <filter id="sm-dim">
-          <feColorMatrix type="matrix" values="0.45 0 0 0 0.02  0 0.42 0 0 0.01  0 0 0.4 0 0  0 0 0 1 0" />
-        </filter>
-        <filter id="sm-scorch">
-          <feColorMatrix type="matrix" values="0.75 0.1 0 0 0.02  0 0.65 0 0 0  0 0 0.6 0 0  0 0 0 1 0" />
-        </filter>
-      </defs>
-      <rect x="-400" y="-200" width="1160" height="1000" fill="url(#sm-ground)" />
-      <g stroke="#ad9f80" strokeWidth="1" fill="none" opacity="0.45">
-        {CRACKS.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
-      </g>
-      {PROPS.map((p, i) => (
-        <g key={i}>
-          <Prop {...p} />
-        </g>
-      ))}
-    </g>
+    <defs>
+      <filter id="sm-dim">
+        <feColorMatrix type="matrix" values="0.45 0 0 0 0.02  0 0.42 0 0 0.01  0 0 0.4 0 0  0 0 0 1 0" />
+      </filter>
+      <filter id="sm-scorch">
+        <feColorMatrix type="matrix" values="0.75 0.1 0 0 0.02  0 0.65 0 0 0  0 0 0.6 0 0  0 0 0 1 0" />
+      </filter>
+    </defs>
   );
 });
 
@@ -160,8 +105,7 @@ const Base = memo(function Base({workshopLevel, busy}: {workshopLevel: number; b
           <path d="M112 548 l-8 -6 M116 544 l2 -10 M120 548 l9 -5" stroke="#ffe08a" strokeWidth="2" strokeLinecap="round" />
         </g>
       )}
-      <Chip x={118} y={582} text={`ROBOT BAY · WORKSHOP LV ${workshopLevel}`} tone="#f5d28a" />
-      <Chip x={254} y={582} text="REPAIR YARD" tone="#cfe8d6" />
+      <Chip x={184} y={582} text={`HOME BASE · WORKSHOP LV ${workshopLevel}`} tone="#f5d28a" />
     </g>
   );
 });
@@ -334,6 +278,7 @@ export interface SectorMapProps {
   selectedSite: string | null;
   pulseSite: string | null;
   onSelectSite: (siteId: string) => void;
+  /** Tapping the home base on the map goes home. */
   onBaseTap: () => void;
 }
 
@@ -351,8 +296,10 @@ export default function SectorMap({state, now, roundMs, selectedSite, pulseSite,
   const homeAssets = state.assets.filter((a) => !m || !m.assets.includes(a.assetId)).map((a) => a.assetId);
 
   return (
-    <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full select-none" style={{overflow: 'visible'}} role="img" aria-label="Sector map">
-      <Ground />
+    <div className="absolute inset-0" data-scene="world">
+      <WorldGroundCanvas sites={sites} />
+    <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full select-none" style={{overflow: 'visible'}} role="img" aria-label="World map">
+      <Defs />
 
       {/* The route out and back. */}
       {m && marchSite && (
@@ -369,7 +316,7 @@ export default function SectorMap({state, now, roundMs, selectedSite, pulseSite,
         />
       )}
 
-      <g onClick={onBaseTap} style={{cursor: 'pointer'}} role="button" aria-label="Open the Robot Bay">
+      <g onClick={onBaseTap} style={{cursor: 'pointer'}} role="button" aria-label="Your home base: go to the Home Base view">
         <Base workshopLevel={state.workshop.level} busy={upgrading} />
       </g>
 
@@ -400,7 +347,46 @@ export default function SectorMap({state, now, roundMs, selectedSite, pulseSite,
         </g>
       )}
     </svg>
+    </div>
   );
+}
+
+/**
+ * The live Season 1 ground under the map: painted once per size on a canvas
+ * with the same "meet" fit as the SVG above it, so props and ground line up
+ * with targets. Target plots stay clear of props.
+ */
+function WorldGroundCanvas({sites}: {sites: Site[]}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState<{w: number; h: number} | null>(null);
+  const siteKey = sites.map((x) => `${x.x},${x.y}`).join('|');
+  useEffect(() => {
+    const el = ref.current?.parentElement;
+    if (!el) return;
+    const measure = () => setSize((prev) => (prev && prev.w === el.clientWidth && prev.h === el.clientHeight ? prev : {w: el.clientWidth, h: el.clientHeight}));
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !size || size.w === 0 || size.h === 0) return;
+    let stale = false;
+    const scale = Math.min(size.w / VIEW_W, size.h / VIEW_H);
+    const ox = (size.w - VIEW_W * scale) / 2;
+    const oy = (size.h - VIEW_H * scale) / 2;
+    const points = [...sites, PARK, {x: 110, y: 540}, {x: 250, y: 540}];
+    const run = () => void paintWorldGround(canvas, {w: size.w, h: size.h, scale, ox, oy, clear: clearPlots(points, 0), avoid: points, avoidRadius: 34}, () => stale);
+    // Let the first frame (HUD, units) land before the per-pixel paint.
+    const id = window.setTimeout(run, 30);
+    return () => {
+      stale = true;
+      window.clearTimeout(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size, siteKey]);
+  return <canvas ref={ref} data-world-ground="1" aria-hidden="true" className="absolute inset-0 h-full w-full bg-[#c9b894]" />;
 }
 
 function SiteMarker({state, site, selected, pulse, engaged, onSelect}: {state: SandboxState; site: Site; selected: boolean; pulse: boolean; engaged: boolean; onSelect: () => void}) {

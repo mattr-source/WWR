@@ -66,6 +66,9 @@ import {battleFrame} from './beats';
 import InstallCeremony from './InstallCeremony';
 import RobotBay from './RobotBay';
 import {RobotFigure} from './RobotFigure';
+import Comms from './Comms';
+import {ArtCard, BoardThumb, BuildingImg, BuildingInfo, PropThumb, RepairYard, SceneTab} from './BasePanels';
+import HomeBase, {type BaseTarget, buildingLabel} from './HomeBase';
 import SectorMap from './SectorMap';
 import {SANDBOX_STORAGE_KEY, dispatchSandbox, openSandbox, resetSandbox} from './store';
 import {Bar, CostLine, SUPPLY_LABEL, SUPPLY_TONE, Section, Sheet, TempArtTag, clock, minutesLabel, primary, secondary, testButton} from './ui';
@@ -77,7 +80,13 @@ const ROUND_MS = CONFIG.roundSeconds * 1000;
 /** Accidental double taps are closer together than this. */
 const TAP_GUARD_MS = 350;
 
-type SheetKind = null | 'bay' | 'hangar' | 'ops' | 'more';
+type SheetKind = null | 'bay' | 'hangar' | 'ops' | 'more' | 'repair' | 'info';
+type Scene = 'base' | 'world';
+
+/** The scene lives in the URL hash, so a reload lands on the same view without another storage key. */
+function sceneFromHash(): Scene {
+  return typeof window !== 'undefined' && window.location.hash === '#world' ? 'world' : 'base';
+}
 
 function actionId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -104,6 +113,18 @@ export default function Sandbox() {
   const [notice, setNotice] = useState<string | null>(opened?.notice ?? null);
   const [toast, setToast] = useState<{text: string; error: boolean; key: number} | null>(null);
   const [sheet, setSheet] = useState<SheetKind>(null);
+  const [scene, setSceneState] = useState<Scene>(sceneFromHash);
+  const [hangarFocus, setHangarFocus] = useState<string | null>(null);
+  const [infoBuilding, setInfoBuilding] = useState<string | null>(null);
+  const setScene = useCallback((next: Scene) => {
+    setSceneState(next);
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${next}`);
+  }, []);
+  useEffect(() => {
+    const onHash = () => setSceneState(sceneFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [bayRole, setBayRole] = useState<Role | undefined>(undefined);
   const [riderMode, setRiderMode] = useState<'auto' | 'open' | 'closed'>('auto');
   const [wall, setWall] = useState(() => Date.now());
@@ -200,6 +221,23 @@ export default function Sandbox() {
   const needsHangar = state.assets.some((a) => assetNeedsRepair(a));
   const riderOpen = riderMode === 'open' || (riderMode === 'auto' && !state.tutorial.completed && !frame && !selected);
   const attention = (on: boolean) => (on ? ' sbx-attention' : '');
+  const wantWorld = want === 'site.select' || want === 'march.start' || want === 'march.arrive' || want === 'battle.seen';
+  const baseHighlight: BaseTarget['kind'] | null =
+    want === 'robot.upgrade' || want === 'upgrade.done' ? 'bay' : want === 'recover' ? 'repair' : want === 'ops.cache' ? 'ops' : wantWorld ? 'world' : null;
+  const openBase = (t: BaseTarget) => {
+    if (t.kind === 'world') setScene('world');
+    else if (t.kind === 'bay') setSheet('bay');
+    else if (t.kind === 'repair') setSheet('repair');
+    else if (t.kind === 'hangar') {
+      setHangarFocus(t.assetId);
+      setSheet('hangar');
+    } else if (t.kind === 'ops') setSheet('ops');
+    else if (t.kind === 'record' || t.kind === 'command') setSheet('more');
+    else {
+      setInfoBuilding(t.buildingId);
+      setSheet('info');
+    }
+  };
 
   return (
     <div className="sbx-root fixed inset-0 flex flex-col overflow-hidden bg-[#b9ab8a] text-neutral-200">
@@ -244,15 +282,19 @@ export default function Sandbox() {
       </header>
 
       <main className="relative min-h-0 flex-1">
-        <SectorMap
-          state={state}
-          now={now}
-          roundMs={ROUND_MS}
-          selectedSite={state.selectedSite}
-          pulseSite={want === 'site.select' ? patrolId : null}
-          onSelectSite={(id) => act({type: 'site.select', siteId: id})}
-          onBaseTap={() => setSheet('bay')}
-        />
+        {scene === 'world' ? (
+          <SectorMap
+            state={state}
+            now={now}
+            roundMs={ROUND_MS}
+            selectedSite={state.selectedSite}
+            pulseSite={want === 'site.select' ? patrolId : null}
+            onSelectSite={(id) => act({type: 'site.select', siteId: id})}
+            onBaseTap={() => setScene('base')}
+          />
+        ) : (
+          <HomeBase state={state} highlight={baseHighlight} onOpen={openBase} />
+        )}
 
         {/* General Rider */}
         <div className="pointer-events-none absolute inset-x-2 top-2 z-10 mx-auto max-w-xl">
@@ -301,7 +343,7 @@ export default function Sandbox() {
         </div>
 
         {/* Victory / Defeat */}
-        {frame?.result && e && (
+        {scene === 'world' && frame?.result && e && (
           <div className="pointer-events-none absolute inset-x-0 top-[38%] z-10 flex flex-col items-center gap-1 px-4">
             <p className={`sbx-banner rounded-lg border-2 px-6 py-2 text-center text-[24px] font-extrabold uppercase tracking-widest shadow-2xl ${e.status === 'won' ? 'border-amber-300 bg-amber-950/90 text-amber-100' : 'border-red-400 bg-red-950/90 text-red-100'}`} style={{['--dur' as string]: '2600ms'}}>
               {e.status === 'won' ? 'Victory' : e.withdrew ? 'Withdrawn' : 'Defeat'}
@@ -313,8 +355,8 @@ export default function Sandbox() {
         )}
 
         {/* Honest label: the robot troops, Dominion machines and fitted kit on the map are provisional. */}
-        <p className="pointer-events-none absolute right-2 top-[4.25rem] z-10 max-w-[40%] rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-right text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
-          Temporary art: robots, Dominion machines, fitted kit
+        <p className={`pointer-events-none absolute z-10 rounded ${scene === 'world' ? 'right-2 top-[4.25rem] max-w-[40%]' : 'bottom-2 right-2 whitespace-nowrap'} border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-right text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300`} data-testid="map-temp-art">
+          {scene === 'world' ? 'Temporary art: robots, Dominion machines, fitted kit' : 'Temporary art: robots, Asset kit'}
         </p>
 
         {toast && (
@@ -327,7 +369,7 @@ export default function Sandbox() {
           </p>
         )}
 
-        {selected && !m && (
+        {scene === 'world' && selected && !m && (
           <div key={selected.id} className="contents">
           <TargetCard
             state={state}
@@ -339,6 +381,10 @@ export default function Sandbox() {
           </div>
         )}
       </main>
+
+      <div className="z-20">
+        <Comms />
+      </div>
 
       {/* What is happening, and where to go. */}
       <nav className="z-20 bg-[#0d0b08]/95 px-2 pt-1.5 backdrop-blur" style={{paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.4rem)'}}>
@@ -359,6 +405,11 @@ export default function Sandbox() {
                   Recall
                 </button>
               )}
+              {scene === 'base' && (
+                <button className={secondary} onClick={() => setScene('world')} aria-label="Watch on the World Map">
+                  Map ›
+                </button>
+              )}
               {m.phase !== 'engaged' ? (
                 <button className={testButton} onClick={() => act({type: 'clock.skipMarch'})} aria-label="Test clock: skip ahead">
                   Test ⏩
@@ -374,18 +425,10 @@ export default function Sandbox() {
             </div>
           )}
           <div className="grid grid-cols-4 gap-1.5">
-            <button className={`${secondary} px-1 text-[13px]${attention(want === 'robot.upgrade' || (want === 'recover' && needsBay))}`} onClick={() => setSheet('bay')}>
-              Robot Bay{needsBay ? ' •' : ''}
-            </button>
-            <button className={`${secondary} px-1 text-[13px]${attention(want === 'recover' && !needsBay && needsHangar)}`} onClick={() => setSheet('hangar')}>
-              Hangar{needsHangar ? ' •' : ''}
-            </button>
-            <button className={`${secondary} px-1 text-[13px]${attention(want === 'ops.cache')}`} onClick={() => setSheet('ops')}>
-              Operations
-            </button>
-            <button className={`${secondary} px-1 text-[13px]`} onClick={() => setSheet('more')} aria-label="Record and test controls">
-              ☰ More
-            </button>
+            <SceneTab label="Home Base" active={scene === 'base'} art={<BoardThumb />} badge={needsBay || needsHangar ? '!' : null} pulse={!!baseHighlight && baseHighlight !== 'world' && scene !== 'base'} onClick={() => setScene('base')} />
+            <SceneTab label="World Map" active={scene === 'world'} art={<PropThumb name="hardy_tree_b" />} badge={m ? '•' : null} pulse={wantWorld && scene !== 'world'} onClick={() => setScene('world')} />
+            <SceneTab label="Operations" active={sheet === 'ops'} art={<img src="/base/building-tactical-operations-center.webp" alt="" className="h-full w-full object-contain" />} pulse={want === 'ops.cache'} onClick={() => setSheet('ops')} />
+            <SceneTab label="Reports" ariaLabel="Reports: record and test controls" active={sheet === 'more'} art={<img src="/base/building-signals-center.webp" alt="" className="h-full w-full object-contain" />} onClick={() => setSheet('more')} />
           </div>
         </div>
       </nav>
@@ -421,7 +464,29 @@ export default function Sandbox() {
       )}
       {sheet === 'hangar' && (
         <Sheet title="Hangar · Task Force Assets" onClose={() => setSheet(null)}>
-          <Hangar state={state} now={now} onAct={act} onTestAdvance={testAdvance} />
+          <Hangar state={state} now={now} focus={hangarFocus} onAct={act} onTestAdvance={testAdvance} />
+        </Sheet>
+      )}
+      {sheet === 'repair' && (
+        <Sheet title="Materials Recovery Yard · Repairs" onClose={() => setSheet(null)}>
+          <RepairYard
+            state={state}
+            now={now}
+            onAct={act}
+            onOpenBay={(role) => {
+              setBayRole(role);
+              setSheet('bay');
+            }}
+            onOpenHangar={(assetId) => {
+              setHangarFocus(assetId);
+              setSheet('hangar');
+            }}
+          />
+        </Sheet>
+      )}
+      {sheet === 'info' && infoBuilding && (
+        <Sheet title={buildingLabel(infoBuilding)} onClose={() => setSheet(null)}>
+          <BuildingInfo buildingId={infoBuilding} />
         </Sheet>
       )}
       {sheet === 'ops' && (
@@ -430,7 +495,7 @@ export default function Sandbox() {
         </Sheet>
       )}
       {sheet === 'more' && (
-        <Sheet title="Record and test controls" onClose={() => setSheet(null)}>
+        <Sheet title="Command Center · Reports" onClose={() => setSheet(null)}>
           <More
             state={state}
             now={now}
@@ -635,8 +700,12 @@ function AssetPortrait({a, size, dim}: {a: TaskAsset; size: number; dim?: boolea
 const ATTR_LABEL = {firepower: 'Firepower', armour: 'Armour', mobility: 'Mobility', range: 'Range', detection: 'Detection'} as const;
 const two = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
-function Hangar({state, now, onAct, onTestAdvance}: {state: SandboxState; now: number; onAct: (a: SandboxAction) => void; onTestAdvance: (minutes: number) => void}) {
-  const [open, setOpen] = useState<string>('');
+function Hangar({state, now, focus, onAct, onTestAdvance}: {state: SandboxState; now: number; focus: string | null; onAct: (a: SandboxAction) => void; onTestAdvance: (minutes: number) => void}) {
+  const [open, setOpen] = useState<string>(focus ?? '');
+  useEffect(() => {
+    if (!focus) return;
+    document.querySelector(`[data-hangar-asset="${focus}"]`)?.scrollIntoView({block: 'start'});
+  }, [focus]);
   return (
     <>
       <p className="px-1 text-[12px] leading-snug text-neutral-400">
@@ -650,7 +719,7 @@ function Hangar({state, now, onAct, onTestAdvance}: {state: SandboxState; now: n
         const rank = nextAssetRank(a);
         const expanded = open === a.assetId;
         return (
-          <div key={a.assetId}>
+          <div key={a.assetId} data-hangar-asset={a.assetId}>
             <Section title={`${asset?.name ?? a.assetId} · ${asset?.code ?? ''}`} right={<span className="text-[12px] text-neutral-400">Service Rank {a.rank}/{SANDBOX_ASSET_RANK_CAP}</span>}>
               <div className="flex gap-3">
                 <AssetPortrait a={a} size={112} dim={a.status === 'disabled'} />
@@ -757,6 +826,17 @@ function Hangar({state, now, onAct, onTestAdvance}: {state: SandboxState; now: n
   );
 }
 
+/** Which base building stands for each Season objective and Daily Operations lane (art only). */
+const OBJECTIVE_ART: Record<string, string> = {exercises: 'garrison_barracks', patrol: 'armour_hub', lanes: 'tactical_operations_center', cache: 'depot'};
+const LANE_ART: Record<string, string> = {
+  command: 'fabrication_shop',
+  industry: 'quartermaster_warehouse',
+  mobilization: 'fuel_point',
+  engagement: 'rotary_hub',
+  readiness: 'recovery_yard',
+  cooperation: 'alliance_trading_post',
+};
+
 function Operations({state, now, onAct}: {state: SandboxState; now: number; onAct: (a: SandboxAction) => void}) {
   const day = sandboxDay(state, now);
   const week = sandboxWeek(day);
@@ -764,44 +844,53 @@ function Operations({state, now, onAct}: {state: SandboxState; now: number; onAc
   const cacheClaimed = state.ledger.includes(`cache:${day}`);
   return (
     <>
-      <Section title={`Season objectives · sandbox day ${day + 1}`} right={<TempArtTag className="hidden" />}>
-        <ul className="space-y-2">
+      <div className="relative -mx-1 overflow-hidden rounded-lg border border-neutral-800 bg-gradient-to-b from-[#3a3122] to-[#16120c]">
+        <img src="/base/building-tactical-operations-center.webp" alt="Tactical Operations Center" className="mx-auto block h-28 object-contain" />
+        <p className="bg-black/70 px-2 py-1 text-[12px] font-semibold text-neutral-200">
+          Tactical Operations Center · {CONFIG.seasonName} · week {week} · sandbox day {day + 1}
+        </p>
+      </div>
+      <Section title="Season objectives" right={<TempArtTag className="hidden" />}>
+        <ul className="space-y-1.5">
           {seasonObjectives(state, now).map((o) => (
             <li key={o.id}>
-              <p className="flex justify-between text-[14px]">
-                <span className={o.done ? 'text-emerald-300' : 'text-neutral-100'}>
-                  {o.done ? '✓ ' : ''}
-                  {o.label}
-                </span>
-                <span className="font-mono text-neutral-400">
-                  {o.progress}/{o.target}
-                </span>
-              </p>
-              <Bar value={o.progress} max={o.target} tone={o.done ? 'bg-emerald-500' : 'bg-cyan-500'} label={o.label} />
-              <p className="text-[11px] text-neutral-500">{o.detail}</p>
+              <ArtCard art={<BuildingImg id={OBJECTIVE_ART[o.id] ?? 'tactical_operations_center'} />} title={o.label} done={o.done} right={<span className="shrink-0 font-mono text-[12px] text-neutral-400">{o.progress}/{o.target}</span>}>
+                <Bar value={o.progress} max={o.target} tone={o.done ? 'bg-emerald-500' : 'bg-cyan-500'} label={o.label} />
+                <p className="mt-0.5 text-[11px] leading-snug text-neutral-500">{o.detail}</p>
+              </ArtCard>
             </li>
           ))}
         </ul>
       </Section>
       <Section title="Daily Operations" right={<span className="text-[12px] text-neutral-400">{Math.min(done.length, LANES_FOR_CACHE)}/{LANES_FOR_CACHE} for the Cache</span>}>
-        <ul className="space-y-1.5">
-          {LANES.map((l) => (
-            <li key={l} className={`rounded border p-2 text-[13px] ${done.includes(l) ? 'border-emerald-800 bg-emerald-950/30' : 'border-neutral-800'}`}>
-              <p className="flex justify-between">
-                <b className={done.includes(l) ? 'text-emerald-200' : 'text-neutral-100'}>
-                  {done.includes(l) ? '✓ ' : ''}
-                  {LANE_COPY[l].label}
-                </b>
-                <span className="text-[12px] text-amber-200">{describeReward(laneReward(l, week))}</span>
-              </p>
-              <p className="text-[12px] text-neutral-400">{SANDBOX_LANE_TRIGGER[l] ?? 'Needs an alliance: not available in the sandbox.'}</p>
-            </li>
-          ))}
+        <ul className="grid grid-cols-2 gap-1.5">
+          {LANES.map((l) => {
+            const ok = done.includes(l);
+            const trigger = SANDBOX_LANE_TRIGGER[l];
+            return (
+              <li key={l} data-lane={l} className={`flex flex-col overflow-hidden rounded-lg border ${ok ? 'border-emerald-700 bg-emerald-950/30' : trigger ? 'border-neutral-800 bg-black/30' : 'border-neutral-800 bg-neutral-950 opacity-70'}`}>
+                <div className="relative h-16 bg-gradient-to-b from-[#3a3122] to-[#1a150e]">
+                  <BuildingImg id={LANE_ART[l]} className={trigger ? '' : 'grayscale'} />
+                  {ok && <span className="absolute right-1 top-1 rounded-full bg-emerald-600 px-1.5 text-[12px] font-bold text-white">✓</span>}
+                </div>
+                <div className="flex-1 p-1.5">
+                  <p className={`text-[13px] font-bold ${ok ? 'text-emerald-200' : 'text-neutral-100'}`}>{LANE_COPY[l].label}</p>
+                  <p className="text-[11px] leading-snug text-neutral-400">{trigger ?? 'Needs an alliance: not available in the sandbox.'}</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-amber-200">{describeReward(laneReward(l, week))}</p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
-        <button className={`${primary} mt-2 w-full`} disabled={cacheClaimed || done.length < LANES_FOR_CACHE} onClick={() => onAct({type: 'ops.cache'})}>
-          {cacheClaimed ? "Today's Cache claimed" : `Claim Cache: ${describeReward(cacheReward(week))}`}
-        </button>
-        <p className="mt-1 text-[11px] text-neutral-500">Lane and Cache rewards are the real Season 1 week {week} table, paid here in practice supplies and test Credits.</p>
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-neutral-800 bg-black/30 p-1.5">
+          <div className="h-14 w-14 shrink-0">
+            <BuildingImg id="depot" />
+          </div>
+          <button className={`${primary} min-w-0 flex-1`} disabled={cacheClaimed || done.length < LANES_FOR_CACHE} onClick={() => onAct({type: 'ops.cache'})}>
+            {cacheClaimed ? "Today's Cache claimed" : `Claim Cache: ${describeReward(cacheReward(week))}`}
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-neutral-500">Lane and Cache rewards are the real Season 1 week {week} table, paid here in practice supplies and test Credits. Building pictures mark each lane; they are not the lane's rules.</p>
       </Section>
     </>
   );
@@ -812,6 +901,16 @@ function More({state, now, onAct, onReset}: {state: SandboxState; now: number; o
   const s = state.stats;
   return (
     <>
+      <div className="relative -mx-1 flex items-end gap-2 overflow-hidden rounded-lg border border-neutral-800 bg-gradient-to-b from-[#3a3122] to-[#16120c] px-2 pt-2">
+        <img src="/base/building-signals-center.webp" alt="Signals Center" className="block h-24 w-1/2 object-contain" />
+        <span className="flex flex-1 items-end justify-center pb-1">
+          {ROLES.map((r) => (
+            <span key={r} className="-mx-0.5 inline-block">
+              <RobotFigure role={r} parts={partsAt(state.robots[r].level)} height={56} status={state.robots[r].status === 'destroyed' || state.robots[r].status === 'disabled' ? state.robots[r].status : 'ready'} />
+            </span>
+          ))}
+        </span>
+      </div>
       <Section title="Task Force" right={<span className="text-[13px] text-neutral-400">Level {lvl.level}</span>}>
         <p className="text-base font-semibold text-neutral-100">{state.company.name}</p>
         <div className="mt-2 flex items-center gap-2">

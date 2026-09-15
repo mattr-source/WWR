@@ -287,25 +287,11 @@ export default function Sandbox() {
         </div>
       </header>
 
-      <main className="relative min-h-0 flex-1">
-        {scene === 'world' ? (
-          <SectorMap
-            state={state}
-            now={now}
-            roundMs={ROUND_MS}
-            selectedSite={state.selectedSite}
-            pulseSite={want === 'site.select' ? patrolId : null}
-            onSelectSite={(id) => act({type: 'site.select', siteId: id})}
-            onBaseTap={() => setScene('base')}
-          />
-        ) : (
-          <HomeBase state={state} highlight={baseHighlight} onOpen={openBase} />
-        )}
-
-        {/* General Rider */}
-        <div className="pointer-events-none absolute inset-x-2 top-2 z-10 mx-auto max-w-xl">
+      {/* General Rider: docked between the HUD and the scene, so it never covers a building, target or control. */}
+      <div className="z-20 bg-[#0d0b08] px-2 pb-1.5" data-rider-dock>
+        <div className="mx-auto max-w-xl">
           {notice && (
-            <p className="pointer-events-auto mb-2 flex items-center gap-2 rounded-md border border-amber-700 bg-amber-950/95 px-3 py-1 text-[13px] text-amber-100" role="status">
+            <p className="mb-1 flex items-center gap-2 rounded-md border border-amber-700 bg-amber-950/95 px-3 py-1 text-[13px] text-amber-100" role="status">
               <span className="flex-1">{notice}</span>
               <button className="min-h-11 px-2 underline" onClick={() => setNotice(null)}>
                 OK
@@ -313,7 +299,7 @@ export default function Sandbox() {
             </p>
           )}
           {riderOpen ? (
-            <section className="pointer-events-auto flex gap-2 rounded-lg border border-cyan-500/50 bg-[#061319]/90 px-2.5 py-2 shadow-xl backdrop-blur" aria-live="polite">
+            <section className="flex gap-2 rounded-lg border border-cyan-500/50 bg-[#061319] px-2.5 py-2" aria-live="polite">
               <img src="/guide/rider-portrait.webp" alt="General Rider" className="h-10 w-10 shrink-0 rounded-full border-2 border-cyan-400/80 object-cover" />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
@@ -341,12 +327,28 @@ export default function Sandbox() {
               </div>
             </section>
           ) : (
-            <button className="pointer-events-auto flex min-h-11 max-w-full items-center gap-2 rounded-full border border-cyan-500/50 bg-[#061319]/90 py-1 pl-1 pr-3 shadow-xl" onClick={() => setRiderMode('open')} aria-label="Show General Rider">
+            <button className="flex min-h-11 w-full items-center gap-2 rounded-full border border-cyan-500/50 bg-[#061319] py-1 pl-1 pr-3 text-left" onClick={() => setRiderMode('open')} aria-label="Show General Rider">
               <img src="/guide/rider-portrait.webp" alt="" className="h-9 w-9 rounded-full border border-cyan-400/80 object-cover" />
               <span className="truncate text-[13px] font-semibold text-cyan-100">▸ {step.objective}</span>
             </button>
           )}
         </div>
+      </div>
+
+      <main className="relative min-h-0 flex-1">
+        {scene === 'world' ? (
+          <SectorMap
+            state={state}
+            now={now}
+            roundMs={ROUND_MS}
+            selectedSite={state.selectedSite}
+            pulseSite={want === 'site.select' ? patrolId : null}
+            onSelectSite={(id) => act({type: 'site.select', siteId: id})}
+            onBaseTap={() => setScene('base')}
+          />
+        ) : (
+          <HomeBase state={state} highlight={baseHighlight} onOpen={openBase} />
+        )}
 
         {/* Victory / Defeat */}
         {scene === 'world' && frame?.result && e && (
@@ -361,9 +363,11 @@ export default function Sandbox() {
         )}
 
         {/* Honest label: the robot troops, Dominion machines and fitted kit on the map are provisional. */}
-        <p className={`pointer-events-none absolute z-10 rounded ${scene === 'world' ? 'right-2 top-[4.25rem] max-w-[40%]' : 'bottom-2 right-2 whitespace-nowrap'} border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-right text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300`} data-testid="map-temp-art">
-          {scene === 'world' ? 'Temporary art: robots, Dominion machines, fitted kit' : 'Temporary art: robots, Asset kit'}
-        </p>
+        {scene === 'world' && (
+          <p className="pointer-events-none absolute right-2 top-2 z-10 max-w-[40%] rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-right text-[10px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
+            Temporary art: robots, Dominion machines, fitted kit
+          </p>
+        )}
 
         {toast && (
           <p

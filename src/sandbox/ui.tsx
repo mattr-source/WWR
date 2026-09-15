@@ -69,21 +69,19 @@ export function CostLine({cost, have, credits = 0, haveCredits = 0}: {cost: Supp
 
 /** A modal sheet from the bottom. */
 export function Sheet({title, onClose, children}: {title: string; onClose: () => void; children: ReactNode}) {
+  // The title bar sits outside the scrolling body, on an opaque panel, so scrolled content can never show above or behind it.
   return (
     <div className="fixed inset-0 z-40 flex items-end bg-black/60" onMouseDown={(ev) => ev.target === ev.currentTarget && onClose()}>
-      <div
-        className="mx-auto max-h-[86dvh] w-full max-w-xl overflow-y-auto overscroll-contain rounded-t-2xl border-t border-neutral-700 bg-[#0d0b08] px-3 pt-2"
-        style={{paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)'}}
-        role="dialog"
-        aria-label={title}
-      >
-        <div className="sticky top-0 z-10 -mx-3 flex items-center justify-between bg-[#0d0b08] px-3 pb-2">
+      <div className="mx-auto flex max-h-[86dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-t border-neutral-700 bg-[#0d0b08]" role="dialog" aria-label={title}>
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 bg-[#0d0b08] px-3 py-2" data-sheet-header>
           <p className="text-[15px] font-semibold text-neutral-100">{title}</p>
           <button className={secondary} onClick={onClose}>
             Close
           </button>
         </div>
-        <div className="space-y-3">{children}</div>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pt-2" style={{paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)'}} data-sheet-body>
+          {children}
+        </div>
       </div>
     </div>
   );

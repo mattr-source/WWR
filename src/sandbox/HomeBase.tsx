@@ -17,7 +17,7 @@ import {type ReactNode, useEffect, useRef} from 'react';
 import {ART_W, BOARD_BUILDINGS, BOARD_H, BOARD_IMAGE, BOARD_W, COMMAND_CENTER_BOX, PADS, PAD_H, PAD_W, type BoardBuilding, TASK_FORCE_PADS, VEHICLE_W, resolvePlacements} from '../../shared/base';
 import {assetArtUrl} from '../../shared/assetVisuals';
 import {ROLES, type SandboxState, assetNeedsRepair, assetOf, findSite, partsAt, robotNeedsRepair, siteLabel} from '../../shared/sandbox';
-import {BUILDING_ROLE, type BaseTarget} from './baseRoles';
+import {BUILDING_ROLE, type BaseTarget, shortName} from './baseRoles';
 import {AssetKitOverlay} from './RefitArt';
 import {RobotFigure} from './RobotFigure';
 
@@ -52,7 +52,9 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
 
   return (
     <div ref={scroller} className="absolute inset-0 isolate overflow-y-auto overscroll-contain bg-[#2b2418]" data-scene="base" aria-label="Home Base">
-      <div className="h-14" aria-hidden />
+      <p className="mx-auto max-w-[560px] px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-amber-300" data-testid="base-temp-art">
+        Temporary art: robots, Asset kit
+      </p>
       <div className="relative mx-auto w-full max-w-[560px]" style={{aspectRatio: `${BOARD_W} / ${BOARD_H}`}}>
         <img src={BOARD_IMAGE} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" decoding="async" />
 
@@ -63,9 +65,8 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
           onClick={() => onOpen({kind: 'command'})}
           aria-label="Command Center: Task Force record and test controls"
         >
-          <span className="pointer-events-none absolute inset-x-0 top-[64%] flex flex-col items-center">
-            <span className="whitespace-nowrap rounded bg-black/80 px-2 py-0.5 text-[11px] font-semibold text-neutral-50 shadow">Command Center</span>
-            <span className="mt-0.5 rounded bg-black/60 px-1.5 text-[10px] text-amber-200">Task Force record</span>
+          <span className="pointer-events-none absolute inset-x-0 bottom-[6%] flex justify-center">
+            <span data-label className="whitespace-nowrap rounded bg-black/80 px-2 text-[11px] font-semibold leading-[1.35] text-neutral-50 shadow">Command Center</span>
           </span>
         </button>
 
@@ -116,10 +117,10 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
                   </span>
                 </span>
               )}
-              <span className="whitespace-nowrap rounded bg-black/85 px-1 text-[10px] font-semibold leading-tight text-neutral-50">
+              <span data-label className="whitespace-nowrap rounded bg-black/85 px-1 text-[10px] font-semibold leading-tight text-neutral-50">
                 {squad} · <span className={m ? 'text-orange-300' : 'text-emerald-300'}>{m ? (m.phase === 'returning' ? 'Returning' : 'Out') : 'Home'}</span>
               </span>
-              <span className="mt-0.5 whitespace-nowrap rounded bg-cyan-800 px-1.5 text-[11px] font-semibold leading-5 text-cyan-50">World Map ›</span>
+              <span data-label className="mt-0.5 whitespace-nowrap rounded bg-cyan-800 px-1.5 text-[11px] font-semibold leading-5 text-cyan-50">World Map ›</span>
               {m && site && <span className="mt-0.5 max-w-[9rem] truncate rounded bg-black/70 px-1 text-[10px] text-orange-200">{siteLabel(site.kind)}</span>}
             </button>
           );
@@ -148,11 +149,12 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
             >
               <img src={b.art} alt="" draggable={false} decoding="async" className={`pointer-events-none block w-full ${role ? '' : 'saturate-[0.7]'}`} />
               {vehicle && extra && <span className="pointer-events-none absolute right-[4%] top-[8%]">{extra}</span>}
-              <span className={`pointer-events-none absolute inset-x-0 flex flex-col items-center ${vehicle ? 'top-[70%]' : 'bottom-[4%]'}`}>
-                <span className={vehicle ? '' : 'flex items-center gap-0.5'}>
-                  <span className={`whitespace-nowrap rounded px-1.5 text-[10px] font-semibold shadow ${role ? 'bg-black/85 text-amber-100' : 'bg-black/55 text-neutral-300'}`}>{role ? role.role : b.name}</span>
-                  {!vehicle && extra}
+              {/* The label never grows wider than the building: short name, at most two lines. The full name is in the aria-label. */}
+              <span className={`pointer-events-none absolute inset-x-0 flex flex-col items-center gap-0.5 ${vehicle ? 'top-[70%]' : 'bottom-[4%]'}`}>
+                <span data-label className={`line-clamp-2 max-w-full rounded px-1 text-center text-[10px] font-semibold leading-[1.2] shadow ${role ? 'bg-black/85 text-amber-100' : 'bg-black/65 text-neutral-200'}`}>
+                  {role ? role.role : shortName(b.id)}
                 </span>
+                {!vehicle && extra}
               </span>
             </button>
           );

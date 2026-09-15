@@ -112,6 +112,13 @@ The sandbox has two scenes, like the live game. The current one is in the URL ha
   to Home Base.
 - **Navigation:** bottom tabs with art (board crop, terrain prop, General Rider, depot, Signals Center): Home Base,
   World Map, Events, Operations, Reports. The HUD has an Events button. The march strip shows on both scenes, with "Map ›" from the base.
+- **Mobile layout rules** (2026-09-15 review fixes, checked by `wwr-e2e-layout.cjs`):
+  - General Rider is docked between the HUD and the scene, never over it. Expanded, collapsed or after Skip,
+    no building, map target or tab is covered, and the tutorial is never skipped for you.
+  - Board labels are short names (full names stay in the accessible name and sheets), at most two lines and
+    never wider than their building. The Command Center has one chip.
+  - The Home Base temporary-art notice is its own row above the board. On the World Map it stays top right.
+  - Sheets keep an opaque title bar outside the scrolling body.
 - **Comms** (`src/sandbox/Comms.tsx`): the live Comms bar and full-screen panel look with the tabs from
   `shared/chat.ts`, shown **offline**: "Comms is offline in the practice sandbox", no messages, input and Send
   disabled. It imports only `react` and `shared/chat.ts`.

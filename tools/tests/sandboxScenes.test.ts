@@ -14,7 +14,8 @@ import {BOARD_BUILDINGS} from '../../shared/base';
 import {CHAT_TABS, TAB_LABEL} from '../../shared/chat';
 import {groundAt, legacyTerrainSeed} from '../../shared/terrain';
 import {PROP_FRAMES} from '../../shared/terrainAtlas';
-import {BUILDING_ROLE, buildingLabel} from '../../src/sandbox/baseRoles';
+import {BUILDING_ROLE, SHORT_NAME, buildingLabel, shortName} from '../../src/sandbox/baseRoles';
+import {Sheet} from '../../src/sandbox/ui';
 import Comms, {COMMS_OFFLINE, CommsPanel} from '../../src/sandbox/Comms';
 import {CHAPTERS, chapterOf, hubModel, phaseOfWeek, unlocksIn} from '../../src/sandbox/seasonHub';
 import {SEASON_1_START, STARTER_ASSETS, UNLOCK_WEEK} from '../../shared/season';
@@ -121,4 +122,30 @@ test('season hub: progress is read from the practice state, and the Warfront car
   const later = T0 + 7 * 24 * 3_600_000;
   assert.equal(sandboxDay(s, later), 7);
   assert.equal(hubModel(s, later, T0).chapter.name, 'Scraplands Sweep');
+});
+
+test('home base labels: every building has a short on-board name; full names stay available', () => {
+  for (const b of BOARD_BUILDINGS) {
+    const onBoard = BUILDING_ROLE[b.id]?.role ?? shortName(b.id);
+    assert.ok(onBoard.length <= 19, `${b.id}: "${onBoard}"`);
+    // One word never wider than a building at 390 px: no single word over 12 characters.
+    assert.ok(onBoard.split(/\s+/).every((w) => w.length <= 12), `${b.id}: "${onBoard}"`);
+    if (!BUILDING_ROLE[b.id]) assert.ok(SHORT_NAME[b.id], `${b.id} has a short name`);
+    assert.equal(buildingLabel(b.id), b.name);
+  }
+  const src = readFileSync(join(root, 'src/sandbox/HomeBase.tsx'), 'utf8');
+  assert.match(src, /aria-label=\{role \? `\$\{role\.role\}: \$\{b\.name\}` : `\$\{b\.name\}: not in the practice sandbox`\}/, 'aria-label keeps the full building name');
+});
+
+test('sheets: the title bar is outside the scrolling body, on an opaque panel', () => {
+  const html = renderToStaticMarkup(createElement(Sheet, {title: 'Season 1 · Events', onClose: () => {}, children: createElement('p', null, 'body')}));
+  const head = html.indexOf('data-sheet-header');
+  const body = html.indexOf('data-sheet-body');
+  assert.ok(head > 0 && body > head, 'header comes before the body');
+  const bodyTag = html.slice(html.lastIndexOf('<div', body), html.indexOf('>', body));
+  assert.match(bodyTag, /overflow-y-auto/);
+  const headTag = html.slice(html.lastIndexOf('<div', head), html.indexOf('>', head));
+  assert.doesNotMatch(headTag, /overflow-y-auto|sticky/);
+  assert.match(headTag, /bg-\[#0d0b08\]/);
+  assert.ok(html.slice(head, body).includes('Season 1 · Events'), 'title inside the header, not the body');
 });

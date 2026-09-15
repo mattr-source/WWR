@@ -38,6 +38,22 @@ export const BUILDING_ROLE: Record<string, {target: BaseTarget; role: string} | 
   fixed_wing_hub: null,
 };
 
+/** Short on-board names for buildings with no sandbox role (full names stay in aria-labels and sheets). */
+export const SHORT_NAME: Record<string, string> = {
+  fuel_point: 'Fuel Point',
+  garrison_barracks: 'Arsenal',
+  quartermaster_warehouse: 'Warehouse',
+  depot: 'Depot',
+  engineer_support_yard: 'Engineers',
+  alliance_trading_post: 'Trading Post',
+  artillery_hub: 'Missiles',
+  fixed_wing_hub: 'Fixed-Wing',
+};
+
+export function shortName(id: string): string {
+  return SHORT_NAME[id] ?? buildingLabel(id);
+}
+
 export function buildingLabel(id: string): string {
   const b = BOARD_BUILDINGS.find((x) => x.id === id);
   return b?.name ?? id;

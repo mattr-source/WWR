@@ -1,153 +1,152 @@
-# Field Sandbox (first playable slice)
+# Field Sandbox: Season 1 private test build
 
-Status: **built and tested locally, not deployed.** All numbers are
-**provisional test defaults** for playing the loop. None of them is an economy
-ruling.
+Status: **built and tested locally on branch `axiom/season-config-foundation`. Not deployed and not pushed.**
+Every number here is a **test-only default** for playing the loop. None of it is an economy, price, timer or
+payment ruling.
 
 ## What it is
 
-A single-player practice patrol at `/sandbox`. Two places link to it:
+A single-player practice loop at `/sandbox`, reached from the sign-in screen card and the signed-in account
+menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
 
-- the sign-in screen (a card above "Report for duty");
-- the signed-in account menu ("Field Sandbox (practice)").
+**The loop, all on one sector map:**
 
-Nothing in it needs an account.
+1. **General Rider** gives one instruction at a time (12 steps, skippable). The season name comes from the config.
+2. **Pick a target** on today's map:
+   - three **real Season 1 exercises**, chosen by the real daily picker (`shared/exercises.ts`) with their real
+     reward table and week multiplier;
+   - a **Dominion Patrol** that grows after every win (test-only enemies and reward);
+   - a **Mock Rival Base**: the base-attack pattern as a private mock. Not a real player, no loot (base-attack loot
+     is not decided), kills are training kills, confirmed PvP stays 0.
+3. **Choose the Task Force**: the humanoid **robot troops** (Scout, Assault, Support) and the starter **Assets**
+   (Abrams, Hind, Global Hawk). Every march needs its drone, as in the live game. The card compares plain HP and
+   firepower totals, with no invented rating or verdict.
+4. **March.** The column (Assets behind, robots in front) moves along its route on the map.
+5. **Attack.** On arrival the engine resolves the whole fight into recorded rounds, and the map plays them: the
+   Scout's mark, shells from Assets and rounds from robots, the Dominion answering, damage numbers, HP bars,
+   wrecks, knock-outs. **Victory** or **Defeat** shows over the target, then the **battle report** (reward, XP,
+   training kills, PvP 0, and every unit's before/after HP or casualty, plus the round-by-round log).
+   Hold exercises are held instead, with a progress ring.
+6. **Return.** The column turns for home. Damaged Assets smoke or burn and set a slower pace (the live
+   `marchHpFactor`). Destroyed robots don't come back: their wrecks stay at the target.
+7. **Recover at base.**
+   - A damaged or disabled robot is **repaired** (supplies + time, faster with the Field Workshop).
+   - A destroyed robot is **remanufactured** (supplies + time) with a new serial and **keeps its level and every
+     part**.
+   - A damaged Asset is repaired by the **live repair bill** (`shared/repair.ts`). Assets are never destroyed.
+   - With no supplies, all of these still happen free and slower, so nobody is stuck (the free path completes no
+     Daily Operations lane).
+8. **Upgrade in the Robot Bay.** Every robot level (test cap 50) installs exactly one part, in the order head,
+   torso, legs, arms, gear, and raises at least one real stat. The screen shows the part removed and fitted
+   (neutral "Mk N" names) and the true before → after numbers. When the timer ends, an **install ceremony** plays
+   for **every** level: gantry arms come down, the old part lifts out, the new one drops in, weld, power-up, then
+   the real numbers. It can be skipped, and it is recorded as seen, so a reload doesn't replay it. The new part
+   stays visible everywhere the robot is drawn.
+9. **Operations.** Today's Season 1 objectives (read from state; they add no rewards of their own), the six real
+   Daily Operations lanes with their real rewards, and the four-lane Cache.
+10. **Records.** Training kills (NPC), battles won and lost, patrols, exercises, robots destroyed, and **Confirmed
+    PvP destructions: 0**.
+11. **Test controls** (dashed amber, always labelled): +1/+5/+30 min, skip to the next march moment, next sandbox
+    day, +5,000 test supplies, "finish now" on jobs, a look-preview slider for levels 1 to 50 (changes nothing),
+    and Reset.
 
-**The loop:**
-1. General Rider gives one instruction at a time (10 steps, skippable).
-2. You start a patrol against three Dominion Crawlers. These are NPCs.
-3. Your company fights with three chassis: Scout (marks a target, +25% company damage), Assault (main gun), Support (patches the most damaged chassis).
-4. You fire volleys round by round, and the robots answer. The tutorial fight always wins and always leaves the Scout **disabled**.
-5. You collect supplies, which pay for the **Field Workshop** upgrade. It runs on a real timer (3 min to level 2) and gives less damage taken and faster repairs.
-6. Recovery works as follows:
-   - A **disabled** chassis is repaired.
-   - A **destroyed** chassis is replaced with a new serial number. A chassis is destroyed when a hit leaves it 30% of max HP below zero, which Walkers can do from patrol 2.
-   - With no supplies, a repair or replacement still comes, only slower, so nobody gets stuck.
-   - A lost patrol is retried at the same strength.
-7. **The company lasts:** its name and XP carry over when chassis are replaced. Each company level adds 5% damage.
-8. **Records are kept apart:**
-   - "Training kills (NPC robots)" counts sandbox kills.
-   - "Confirmed PvP destructions" is always 0, with a line saying it counts only real battles against other commanders.
-   - The engine cannot raise the PvP number, and a stored state that claims one is thrown away.
-9. **Test controls** (dashed amber panel, collapsed by default):
-   - "+1/+5/+30 min" moves only the sandbox's own clock offset.
-   - "Reset sandbox" clears the sandbox company.
+## Where things live
 
-## Battlefield pass (2026-09-15)
+| File | What |
+|---|---|
+| `shared/sandboxSeason.ts` | `SandboxSeasonConfig`, a typed and validated **test-only** config: robot stats, part bonuses, the level-50 test cap, upgrade costs (supplies only) and timers, repair and remanufacture, march and hold seconds, Task Force Assets, round length. `testOnly: true` is required. |
+| `shared/sandbox.ts` | The pure engine: state, actions, settle-on-read, `resolveBattle` (structured round events), Assets, sites, lanes, objectives, tutorial, save reading. Enemy stats, patrol reward and Field Workshop steps are still test-only constants here. |
+| `src/sandbox/store.ts` | localStorage under `wwr.sandbox.v1`; `openSandbox` returns a visible notice when a save can't be kept. |
+| `src/sandbox/beats.ts` | Turns a resolved battle into what's on screen at any instant. |
+| `src/sandbox/SectorMap.tsx` | The map, columns, battle cluster and effects. |
+| `src/sandbox/RobotBay.tsx`, `InstallCeremony.tsx` | Robot Bay, Field Workshop, look preview, install ceremony. |
+| `src/sandbox/RobotFigure.tsx` | Robot troops and Dominion machines as layered vector parts (**temporary art**). |
+| `src/sandbox/Sandbox.tsx` | The screen: HUD, Rider, target card, battle report, Hangar, Operations, record, test controls. |
 
-Matt's first test found the card layout felt boxy and needed graphics and motion. The screen is now
-a battlefield.
+## Art: what's real and what's temporary
 
-**Layout (portrait first):**
-- **HUD (top):** company name, level and XP; the four sandbox supplies.
-- **Battlefield (fills the rest):** an illustrated salt basin in SVG.
-  - Depth: far ridges, haze, salt cracks, craters, rocks, tracks and drifting dust.
-  - The Dominion patrol is at the top, the company at the bottom, the Field Workshop in the corner.
-- **General Rider:** a compact overlay at the top of the field, one instruction at a time. It folds to a single objective line during a fight so it never covers the robots; tap to reopen.
-- **Action bar (bottom):** only what makes sense now (Start patrol / Fire volley / Collect supplies, plus Repair or Replace, Upgrade Workshop, and a dashed-amber "Test +5m" while a timer runs). The current tutorial step's button pulses.
-- **☰ Base sheet:** company roster with repair/replace, Workshop, service record (training kills apart from confirmed PvP = 0), combat log, and the test controls (+1/+5/+30 min, Reset sandbox). Tapping a unit also opens it.
+- **Existing WWR art reused:**
+  - Asset hero renders `public/assets/<id>/r01.webp` (via `shared/assetVisuals.ts`), as the live world map draws them.
+  - Matt's base buildings (`building-fabrication-shop`, `building-recovery-yard`, `building-garrison-barracks` for the mock rival).
+  - Terrain atlas props (`shared/terrainAtlas.ts`) and the Alliance Convoy truck.
+  - General Rider's portrait.
+- **Temporary vector art (labelled "Temporary art" on screen), not approved final art:**
+  - The humanoid robots: five internal looks per part, from salvaged scrap at level 1 to glowing powered armour at level 50, plus a visible change at every tier.
+  - The Dominion Crawler and Walker.
+  - No approved robot or Dominion art exists yet. No paid or generated images were used.
+- The rejected flat unit SVGs (`public/sandbox/units/*`) and the old `Battlefield.tsx` are removed.
 
-**Animation follows real state only.** `src/sandbox/beats.ts` compares the saved state before and
-after each action, plus the combat log lines the engine wrote for that volley, and builds a short
-timeline:
-- Support's patch beam, the Scout's target reticle, muzzle flashes, recoil and projectiles from the chassis that were actually ready.
-- Impacts and floating damage numbers equal to the real HP change; explosions and wrecks only for robots the engine destroyed.
-- Each surviving robot lunging and firing its real hit, then "Disabled" or "DESTROYED" exactly when the engine says so.
-- The win/loss banner with the real XP gained.
-- Crates lifting from wrecks and "+N" over the supply counters, equal to the real gain.
-- Workshop welding sparks, a crane and a progress ring with countdown; a repair drone and welding on a repairing chassis; a beacon for an inbound replacement.
-- Completion flares when a timer really finishes: workshop level-up, "Repaired", or a drop pod with the new serial. This fires whether the timer finishes on its own, from the test clock, or in another tab.
+## Saves
 
-HP bars catch up hit by hit; when the timeline ends the view equals the saved state.
-`tools/tests/sandboxBeats.test.ts` checks every timeline against the engine: damage sums, kill
-count, hit lines, shooters, final view and banners, across the tutorial and 14 later patrols with
-heals, disabled and destroyed chassis, and losses.
-
-**Input:** the action is applied and saved first, then played. Buttons lock while shots are in the
-air, and any second tap within 350 ms is ignored, so a double tap can't fire two volleys. The
-engine's action ids still stop replays as before.
-
-**Reduced motion:** with `prefers-reduced-motion` the timeline collapses to "now". There are no
-projectiles, movement or loops; state and HP update at once, and the numbers and banners fade in
-place.
-
-**Art (all original, no external or generated assets):**
-- New `public/sandbox/units/crawler.svg` and `walker.svg` (top-down Dominion robots).
-- The existing Scout/Assault/Support SVGs.
-- The terrain, workshop, crates, drones and effects are inline SVG/CSS in `Battlefield.tsx` and `sandbox.css`.
-- No canvas and no paid or image-generation calls. The approved fal scout render was not used.
-
-**Cost:** the sandbox chunk is 18 KB gzipped JS + 1 KB CSS, loaded only on `/sandbox`. The game's
-entry bundle is unchanged (66 KB).
+- A save from another state format (the previous battlefield build wrote schema 1) or another season config
+  **starts over with a visible notice**: "The practice test build changed…".
+- A save from the same config at another tuning `version` is **kept**; tuning is re-read and robot levels are held
+  at the current cap. Bump the config `version` for tuning. Only a state-shape change bumps `SANDBOX_SCHEMA`.
 
 ## How it is isolated
 
-- **Engine:** `shared/sandbox.ts` is pure and deterministic, with no clock, randomness or I/O.
-- **Storage:** `src/sandbox/store.ts` saves to **this browser's localStorage** under one key, `wwr.sandbox.v1`.
-- **No server contact:** there is no API call, no Worker change and no migration. A test checks that the sandbox files import nothing but React and each other, and that no file in `worker/`, `src/live/` or `src/net/` reads sandbox state.
-- **Reload and resume:** every action saves. Timers are absolute instants, settled when the page reads them. Closing the page doesn't stop a timer.
-- **Idempotent:**
-  - Every tap carries a unique action id, and a replayed id changes nothing.
-  - Rewards (`reward:<encounter>`) and robot destructions (`destroyed:<encounter>:<robot>`) are ledger keys that count once.
-  - Each action re-reads storage first, so two open tabs take turns instead of overwriting each other.
+- **No server contact:** no API call, no Worker change, no migration.
+- **Strict imports:** `tools/tests/sandbox.test.ts` holds a per-file import allow-list. It also follows every
+  import the sandbox reaches and fails on anything in `src/live`, `src/net` or `worker/`, any `fetch`/`/api/`,
+  and any wallet, economy or payment module. Nothing in the live game reads sandbox state.
+- **Idempotent:** every tap carries an action id. Rewards (`reward:`), battles (`battle:`), destructions
+  (`destroyed:`), lanes and the Cache are ledger keys that count once. Each action re-reads storage first.
+- **Currency:** sandbox Credits always read "test Credits". A test fails on "Command Credits", "Tokens" or a bare
+  "Credits" in the sandbox UI.
 - **Switch:** building with `VITE_WWR_SANDBOX=off` hides the links and the route.
-- **Limitation:** sandbox state is browser-side, not server-authoritative. That's acceptable only because it grants nothing real. Moving it server-side would need a new table (a schema change, not made here).
+- **Limitation:** state is browser-side, not server-authoritative. That's acceptable only because it grants
+  nothing real.
 
-## Art
+## Verified (2026-09-15)
 
-`public/sandbox/units/{scout,assault,support}.svg` are copied unmodified
-from the reviewed art starter kit (`/srv/axiom/docs/wwr-art-prototype/assets/svg`,
-byte-identical). They are original hand-written SVG. The art connector was not
-imported. The enemy robots (`crawler.svg`, `walker.svg`) are original placeholders drawn for the sandbox.
-General Rider's portrait is the game's existing `/guide/rider-portrait.webp`.
+- `npm test`: 106 pass (`sandbox.test.ts` 18, `sandboxBeats.test.ts` 4, all existing suites). `tsc` clean on client and worker.
+- `vite build` passes the size budget, built into a separate folder so the live preview's `dist/` was untouched:
+  - entry 67 KB gzipped (was 66);
+  - the sandbox chunk is 43 KB gzipped plus 2 KB CSS, loaded only on `/sandbox`.
+- **Headless Chromium, 390×844 touch, normal and `prefers-reduced-motion` (18/18 checks each).** Screenshots are in `/srv/axiom-data/reports/wwr-sandbox-season1/`:
+  - tutorial start;
+  - a double tap on Attack starts one march;
+  - reload mid-march resumes it;
+  - the battle plays on the map, then Victory and the report;
+  - the reward is applied once;
+  - Robot Bay upgrade, ceremony with before/after firepower, marked seen, no replay after reload;
+  - repair, then the Cache claimed once;
+  - a defeat at the Mock Rival Base (no reward, PvP 0), and the damaged return with the burning drone;
+  - no horizontal overflow, no control under 44 px, only `wwr.sandbox.v1` in storage, no `/api/` requests, no page errors.
 
-## Private preview (for AXIOM to run; Matt only opens the link)
+## Exposing the candidate to Matt's private preview (for AXIOM; no live change)
 
-The preview serves the built client only. There is no Worker, so **sign-in
-does not work in the preview**. The sign-in screen's sandbox card and the
-sandbox itself do work.
-
-On the server, from `/srv/projects/wwr-build-foundation`:
+The private preview at `https://axiom.tail84303e.ts.net:8443/sandbox` is `vite preview` on `127.0.0.1:4180`,
+serving this worktree's `dist/`. Tailnet only, not Funnel. To swap in this build without touching anything
+public:
 
 ```bash
-npm run build
+cd /srv/projects/wwr-build-foundation
+npx tsc --noEmit && npx tsc --noEmit -p worker && npm test   # must all pass
+mv dist /tmp/wwr-dist-4ac1273-backup                          # keep the last-good preview build
+npm run build                                                 # writes dist/ and checks the budget
+# vite preview serves files from disk: a hard refresh on the phone shows the new build, no restart needed.
+```
+
+Roll back: `rm -rf dist && mv /tmp/wwr-dist-4ac1273-backup dist`.
+If the preview process is not running, start it as before:
+
+```bash
 WWR_PREVIEW_HOSTS=axiom.tail84303e.ts.net nohup npx vite preview --host 127.0.0.1 --port 4180 --strictPort > /tmp/wwr-sandbox-preview.log 2>&1 &
-tailscale serve --bg --https=8443 http://127.0.0.1:4180
 ```
 
-Matt's link (tailnet only, phone must be on the tailnet):
-**https://axiom.tail84303e.ts.net:8443/sandbox**
+`tailscale serve` (8443 → 4180) needs no change. Sign-in does not work in the preview (no Worker); the sandbox does.
 
-To take it down:
+## Not in this slice (Season 1 is NOT complete)
 
-```bash
-tailscale serve --https=8443 off
-```
-
-Then stop the `vite preview` process on port 4180.
-
-- The preview binds to 127.0.0.1 only. Tailscale serve is the only way in, and it's private to the tailnet. It is not Funnel, so it isn't public.
-- `WWR_PREVIEW_HOSTS` is needed because Vite rejects an unlisted Host header (checked: 403 without it, 200 with it). It affects `vite preview` only, not the production build.
-- The existing `https://axiom.tail84303e.ts.net/` (port 443, AXIOM) is untouched. The preview uses port 8443.
-
-## Verified locally (2026-09-15, battlefield pass)
-
-- `npm test`: 103 pass (sandbox 12, battlefield timelines 7).
-- `tsc` clean on client and worker; `npm run build` passes its size budget.
-- Headless Chromium, 390×844 touch, run twice (normal motion and `prefers-reduced-motion`), on the private preview build:
-  - the tutorial runs from step 1 to completed;
-  - a simultaneous double tap on Fire applied exactly one volley;
-  - reload after collecting shows no second Collect and the same supplies;
-  - the Workshop reaches level 2 and the repair finishes via Test +5m;
-  - all three company units stay visible while firing;
-  - the Base sheet shows training kills 3 and confirmed PvP 0, and has Reset;
-  - only `wwr.sandbox.v1` is in storage;
-  - no horizontal overflow, no control under 44 px tall, no page errors.
-
-## Not in this slice
-
-- The signed-in menu link can only be clicked with a running Worker, and that needs a local D1 migration, which wasn't authorized.
-- Strings are English only; the i18n pass hasn't been run.
-- The battlefield is one fixed portrait scene. Desktop shows the same scene centred with terrain filling the sides. There is no camera, zoom or unit movement across the map, and no sound.
-- Numbers are untuned beyond a playthrough script (`tools/sim/sandboxPlaythrough.ts`). Patrol 6 (a fourth robot) is a wall until the Workshop and company level catch up.
-- Not built yet: work orders, multiplayer, server persistence, and real PvP.
+- **Server side:** no persistence, multiplayer or real PvP. The rival base is a mock.
+- **Payments and progression:** no payments, no Work Orders, no real base or asset progression.
+- **Assets:** Asset upgrades are not in the sandbox; Assets sit at rank 1.
+- **Numbers:** robot, enemy, patrol, repair, remanufacture, march and battle numbers are untuned test defaults. CC10 pacing targets are not modelled.
+- **Art:** no approved robot or Dominion art; the vector figures are temporary.
+- **Alliance:** the Cooperation lane is not available.
+- **Presentation:**
+  - English only (no i18n pass);
+  - no sound, camera or zoom;
+  - one fixed portrait map.
+- **Proposal names awaiting Matt:** Robot Bay, Repair Yard, remanufacture, Mk part names, Crawler and Walker, Mock Rival Base, "1st Iron Task Force", Field Workshop (also a base skin's name).

@@ -537,6 +537,16 @@ test('the test clock and test supplies move only the sandbox and are bounded', (
   const next = p.ok({type: 'clock.nextDay'});
   assert.equal(sandboxDay(next, p.simNow()), 1);
   assert.notDeepEqual(todaySites(p).map((x) => x.id), day0);
+  // Skipping a march lands exactly on its next moment: contact, not past the fight.
+  const q = skipped();
+  q.ok({type: 'march.start', siteId: patrolSite(q).id, robots: [...ROLES], assets: ALL_ASSETS});
+  const atContact = q.ok({type: 'clock.skipMarch'});
+  assert.equal(atContact.march?.phase, 'engaged');
+  assert.equal(atContact.encounter?.applied, false);
+  const pastFight = q.ok({type: 'clock.skipMarch'});
+  assert.equal(pastFight.march?.phase, 'returning');
+  assert.equal(q.ok({type: 'clock.skipMarch'}).march, null);
+  assert.equal(q.run({type: 'clock.skipMarch'}).ok, false);
   const beforeGrant = p.state();
   const granted = p.ok({type: 'test.supplies'});
   assert.equal(granted.supplies.steel - beforeGrant.supplies.steel, 5000);
@@ -551,7 +561,7 @@ test('sandbox currency is always labelled as test currency, never as real Credit
     const src = readFileSync(join(root, 'src/sandbox', f), 'utf8');
     assert.doesNotMatch(src, /Command Credits|\bTokens?\b/, f);
     // Any on-screen "Credits" word must say "test Credits".
-    for (const m of src.matchAll(/(\w+\s)?Credits\b/g)) assert.equal(m[1]?.trim(), 'test', `${f}: "${m[0]}"`);
+    for (const m of src.matchAll(/(\w+\s)?\bCredits\b/g)) assert.equal(m[1]?.trim(), 'test', `${f}: "${m[0]}"`);
   }
 });
 
@@ -582,7 +592,7 @@ test('isolation: one storage key, a strict import allow-list, and no path to the
     'shared/sandbox.ts': ['./assets', './combat', './exercises', './repair', './season1Ops', './sandboxSeason', './upgrades'],
     'shared/sandboxSeason.ts': ['./assets', './exercises', './season', './season1Ops'],
   };
-  const SANDBOX_UI = ['react', '../../shared/sandbox', '../../shared/sandboxSeason', './store', './flag', './beats', './Battlefield', './SectorMap', './RobotFigure', './RobotBay', './InstallCeremony', './ui', './sandbox.css', './robotFigure.css'];
+  const SANDBOX_UI = ['react', '../../shared/sandbox', '../../shared/sandboxSeason', '../../shared/exercises', '../../shared/season1Ops', '../../shared/assetVisuals', '../../shared/terrainAtlas', '../../shared/allianceConvoyVisuals', './store', './flag', './beats', './Battlefield', './SectorMap', './RobotFigure', './RobotBay', './InstallCeremony', './ui', './sandbox.css', './robotFigure.css'];
   const files = ['shared/sandbox.ts', 'shared/sandboxSeason.ts', ...readdirSync(join(root, 'src/sandbox')).filter((f) => /\.tsx?$/.test(f)).map((f) => `src/sandbox/${f}`)];
   for (const file of files) {
     const src = readFileSync(join(root, file), 'utf8');

@@ -253,5 +253,5 @@ export const SANDBOX_SEASON_1_TEST = defineSandboxSeason({
   taskForceAssets: ['m1a2', 'mi35m', 'rq4'],
   assetFirepowerScale: 2,
   battleRoundCap: 12,
-  roundSeconds: 2.4,
+  roundSeconds: 3,
 });

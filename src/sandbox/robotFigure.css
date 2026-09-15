@@ -1,0 +1,86 @@
+/* RobotFigure: hand-built SVG robot art for the Field Sandbox (temporary vector art). */
+.rf-svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Highlighted slot: an amber outline glow that pulses. */
+.rf-hl {
+  animation: rf-pulse 1.1s ease-in-out infinite;
+}
+@keyframes rf-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Idle breathing bob. */
+.rf-idle {
+  animation: rf-bob 2.8s ease-in-out infinite;
+}
+@keyframes rf-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(1.5px);
+  }
+}
+
+/* Lights and lenses dim when the robot is down. */
+.rf-disabled .rf-eye {
+  opacity: 0.22;
+}
+.rf-destroyed .rf-eye {
+  opacity: 0;
+}
+
+.rf-spark {
+  animation: rf-spark 0.9s steps(2, jump-none) infinite;
+}
+@keyframes rf-spark {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.1;
+  }
+}
+
+.rf-smoke {
+  opacity: 0.45;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rf-smoke 2.6s ease-out infinite;
+}
+@keyframes rf-smoke {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  25% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-28px) scale(1.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rf-hl,
+  .rf-idle,
+  .rf-spark,
+  .rf-smoke {
+    animation: none;
+  }
+  .rf-hl {
+    opacity: 0.85;
+  }
+}

@@ -238,6 +238,7 @@ export type SandboxAction =
   | {type: 'ops.cache'}
   | {type: 'clock.advance'; minutes: number}
   | {type: 'clock.nextDay'}
+  | {type: 'clock.skipMarch'}
   | {type: 'install.seen'}
   | {type: 'test.supplies'}
   | {type: 'company.rename'; name: string};
@@ -434,10 +435,10 @@ export const BASE_AT = {x: 180, y: 520};
 const SITE_SLOTS = [
   {x: 78, y: 318},
   {x: 290, y: 262},
-  {x: 170, y: 176},
+  {x: 214, y: 178},
 ];
 export const PATROL_AT = {x: 280, y: 410};
-export const RIVAL_BASE_AT = {x: 66, y: 110};
+export const RIVAL_BASE_AT = {x: 96, y: 112};
 
 export function sandboxDay(state: SandboxState, now: number, config: SandboxSeasonConfig = SANDBOX_SEASON_1_TEST): number {
   return Math.max(0, Math.floor((now - state.createdAt) / config.dayMs));
@@ -515,7 +516,7 @@ export function enemyTotals(enemies: Enemy[], strength: number): {hp: number; fi
 export const SANDBOX_LANE_TRIGGER: Record<Lane, string | null> = {
   command: 'Start a Field Workshop upgrade',
   industry: 'Bring back a reward (sandbox stand-in for an hour of production)',
-  mobilization: LANE_COPY.mobilization.task,
+  mobilization: 'Launch a march (the sandbox has no formations to change)',
   engagement: LANE_COPY.engagement.task,
   readiness: 'Upgrade, repair or remanufacture with supplies (the free slow path does not count)',
   cooperation: null,
@@ -1134,6 +1135,16 @@ function reduce(s: SandboxState, action: SandboxAction, now: number, config: San
       const target = s.createdAt + (day + 1) * config.dayMs;
       const next = {...s, clockOffsetMs: s.clockOffsetMs + (target - now), selectedSite: null};
       return done(settle(next, target, config), `Test clock: sandbox day ${day + 2} (new exercises).`);
+    }
+
+    case 'clock.skipMarch': {
+      const m = s.march;
+      if (!m) return fail('No march to skip.');
+      const target = m.phase === 'outbound' ? m.arriveAt : m.phase === 'returning' ? m.returnAt : m.holdUntil;
+      if (target === null || target <= now) return done(s);
+      const next = {...s, clockOffsetMs: s.clockOffsetMs + (target - now)};
+      const label = m.phase === 'outbound' ? 'to contact' : m.phase === 'engaged' ? 'past the fight' : m.phase === 'holding' ? 'to the end of the hold' : 'to home';
+      return done(settle(next, target, config), `Test clock: skipped ${label} (sandbox only).`);
     }
 
     case 'site.select': {

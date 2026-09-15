@@ -177,3 +177,48 @@
   }
   @keyframes sbx-fade { 0% { opacity: 0; } 10%, 85% { opacity: 1; } 100% { opacity: 0; } }
 }
+
+/* Sector map. */
+.sm-route { animation: sm-route 1.2s linear infinite; }
+@keyframes sm-route { to { stroke-dashoffset: -26; } }
+.sm-drive { animation: sm-drive 0.5s ease-in-out infinite; }
+@keyframes sm-drive { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.2px); } }
+.sm-march { animation: sm-march 0.42s ease-in-out infinite; }
+@keyframes sm-march { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.sm-reticle-live { animation: sbx-crate 0.9s ease-in-out infinite; }
+.sbx-flame { animation: sbx-flame 0.28s steps(2) infinite; transform-box: fill-box; transform-origin: bottom center; }
+@keyframes sbx-flame { 0% { transform: scale(1, 1); } 100% { transform: scale(0.85, 1.18); } }
+.sbx-wreck-fade { opacity: 0.85; }
+
+/* Install ceremony: arms down, old part out, new part in, weld, power up (about 3.3 s). */
+.sbx-arm { animation: sbx-arm 3.2s ease-in-out both; }
+@keyframes sbx-arm {
+  0% { transform: translateY(-120px); }
+  22%, 70% { transform: translateY(40px); }
+  100% { transform: translateY(-120px); }
+}
+.sbx-part-out { animation: sbx-part-out 1.5s ease-in 0.7s both; }
+@keyframes sbx-part-out {
+  0% { transform: translateY(0); opacity: 1; }
+  30% { transform: translateY(-6px); opacity: 1; }
+  100% { transform: translateY(-160px) rotate(-8deg); opacity: 0; }
+}
+.sbx-part-in { animation: sbx-part-in 1s cubic-bezier(0.2, 0.7, 0.3, 1) 1.7s both; }
+@keyframes sbx-part-in {
+  0% { transform: translateY(-180px); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.sbx-weld-burst { animation: sbx-weld-burst 0.6s steps(3) 2.6s both; }
+@keyframes sbx-weld-burst { 0%, 100% { opacity: 0; } 20%, 60% { opacity: 1; } 40%, 80% { opacity: 0.2; } }
+.sbx-power-flash { animation: sbx-power-flash 0.6s ease-out 2.9s both; }
+@keyframes sbx-power-flash { 0% { opacity: 0; transform: scale(0.5); } 40% { opacity: 1; } 100% { opacity: 0; transform: scale(1.4); } }
+.sbx-chamber-light { animation: sbx-chamber-light 2.4s ease-in-out infinite alternate; }
+@keyframes sbx-chamber-light { from { opacity: 0.6; } to { opacity: 1; } }
+.sbx-powered { animation: sbx-powered 0.8s ease-out both; }
+@keyframes sbx-powered { 0% { filter: brightness(1.8) drop-shadow(0 0 16px #67e8f9); } 100% { filter: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-route, .sm-drive, .sm-march, .sm-reticle-live, .sbx-flame, .sbx-chamber-light, .sbx-powered { animation: none !important; }
+  .sbx-arm, .sbx-part-out, .sbx-part-in, .sbx-weld-burst, .sbx-power-flash { animation: none !important; opacity: 0; }
+}

@@ -244,7 +244,7 @@ export default function Sandbox() {
       {/* HUD */}
       <header className="z-20 bg-[#0d0b08]/92 px-2 pb-1.5 backdrop-blur" style={{paddingTop: 'calc(env(safe-area-inset-top) + 0.35rem)'}}>
         <div className="mx-auto flex max-w-xl items-center gap-2">
-          <a href="/" className={`${secondary} inline-flex shrink-0 items-center px-2.5`} aria-label="Back to the game">
+          <a href="/" className={`${secondary} inline-flex min-w-11 shrink-0 items-center justify-center px-2.5`} aria-label="Back to the game">
             ←
           </a>
           <button className="min-h-11 min-w-0 flex-1 text-left" onClick={() => setSheet('more')} aria-label="Task Force record">

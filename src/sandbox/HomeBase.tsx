@@ -40,8 +40,8 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
   const site = m ? findSite(state, m.siteId) : null;
 
   const badge = (b: BoardBuilding): ReactNode => {
-    if (b.id === 'recovery_yard' && needsRepair) return <span className="rounded bg-red-700 px-1 text-[10px] font-bold text-white">Needs repair</span>;
-    if (b.id === 'fabrication_shop' && upgrading) return <span className="rounded bg-cyan-800 px-1 text-[10px] font-bold text-cyan-50">Working</span>;
+    if (b.id === 'recovery_yard' && needsRepair) return <span className="whitespace-nowrap rounded bg-red-700 px-1 text-[10px] font-bold text-white">Needs repair</span>;
+    if (b.id === 'fabrication_shop' && upgrading) return <span className="whitespace-nowrap rounded bg-cyan-800 px-1 text-[10px] font-bold text-cyan-50">Working</span>;
     const hangar = BUILDING_ROLE[b.id]?.target;
     if (hangar?.kind === 'hangar' && hangar.assetId) {
       const a = state.assets.find((x) => x.assetId === hangar.assetId);
@@ -51,7 +51,7 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
   };
 
   return (
-    <div ref={scroller} className="absolute inset-0 overflow-y-auto overscroll-contain bg-[#2b2418]" data-scene="base" aria-label="Home Base">
+    <div ref={scroller} className="absolute inset-0 isolate overflow-y-auto overscroll-contain bg-[#2b2418]" data-scene="base" aria-label="Home Base">
       <div className="relative mx-auto w-full max-w-[560px]" style={{aspectRatio: `${BOARD_W} / ${BOARD_H}`}}>
         <img src={BOARD_IMAGE} alt="" draggable={false} className="pointer-events-none absolute inset-0 h-full w-full" decoding="async" />
 
@@ -136,7 +136,7 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
               data-building={b.id}
               onClick={() => onOpen(role ? role.target : {kind: 'info', buildingId: b.id})}
               aria-label={role ? `${role.role}: ${b.name}` : `${b.name}: not in the practice sandbox`}
-              className={`absolute block rounded-md ${lit ? 'sbx-attention' : ''}`}
+              className={`absolute flex min-h-11 flex-col ${vehicle ? 'justify-center' : 'justify-end'} rounded-md ${lit ? 'sbx-attention' : ''}`}
               style={{
                 left: `${pad.x * 100}%`,
                 top: `${y * 100}%`,
@@ -146,10 +146,11 @@ export default function HomeBase({state, highlight, onOpen}: {state: SandboxStat
               }}
             >
               <img src={b.art} alt="" draggable={false} decoding="async" className={`pointer-events-none block w-full ${role ? '' : 'saturate-[0.7]'}`} />
+              {vehicle && extra && <span className="pointer-events-none absolute right-[4%] top-[8%]">{extra}</span>}
               <span className={`pointer-events-none absolute inset-x-0 flex flex-col items-center ${vehicle ? 'top-[70%]' : 'bottom-[4%]'}`}>
-                <span className="flex items-center gap-0.5">
+                <span className={vehicle ? '' : 'flex items-center gap-0.5'}>
                   <span className={`whitespace-nowrap rounded px-1.5 text-[10px] font-semibold shadow ${role ? 'bg-black/85 text-amber-100' : 'bg-black/55 text-neutral-300'}`}>{role ? role.role : b.name}</span>
-                  {extra}
+                  {!vehicle && extra}
                 </span>
               </span>
             </button>

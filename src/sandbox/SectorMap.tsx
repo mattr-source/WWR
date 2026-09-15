@@ -296,7 +296,7 @@ export default function SectorMap({state, now, roundMs, selectedSite, pulseSite,
   const homeAssets = state.assets.filter((a) => !m || !m.assets.includes(a.assetId)).map((a) => a.assetId);
 
   return (
-    <div className="absolute inset-0" data-scene="world">
+    <div className="absolute inset-0 isolate" data-scene="world">
       <WorldGroundCanvas sites={sites} />
     <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0 h-full w-full select-none" style={{overflow: 'visible'}} role="img" aria-label="World map">
       <Defs />

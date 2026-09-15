@@ -100,7 +100,7 @@ function pips(x: number, y: number, n: number) {
   if (n <= 0) return null;
   const rows = Math.ceil(n / 3);
   return (
-    <g>
+    <g data-pips="1">
       <rect x={x} y={y} width={5.2} height={1.1 + rows * 1.35} rx={0.9} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.35} />
       {seq(n).map((i) => (
         <circle key={i} cx={x + 1.25 + (i % 3) * 1.35} cy={y + 1.2 + Math.floor(i / 3) * 1.35} r={0.45} fill={i === 8 ? AMB : CY} />
@@ -111,7 +111,7 @@ function pips(x: number, y: number, n: number) {
 }
 function socket() {
   return (
-    <g opacity={0.78}>
+    <g data-socket="1" opacity={0.78}>
       <circle r={3} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.6} />
       <circle r={1.7} fill="none" stroke={MAT.gun[0]} strokeWidth={0.45} strokeDasharray="0.8 0.6" className="ra-nf" />
       {[45, 135, 225, 315].map((a) => (
@@ -122,10 +122,11 @@ function socket() {
 }
 
 // ── Package module designs, local coords, origin = mount point ─────────────
-type Design = (u: string, lv: number) => ReactNode;
+/** `map` = drawn at map scale: fine detail such as level pips is left out. */
+type Design = (u: string, lv: number, map?: boolean) => ReactNode;
 
 /** Box launcher: rows of three tubes stacked upward off a bracket. */
-const launcher: Design = (u, lv) => {
+const launcher: Design = (u, lv, map) => {
   const us = units(lv);
   return (
     <>
@@ -152,13 +153,13 @@ const launcher: Design = (u, lv) => {
           {lite(15, -12, 2.6, 1)}
         </g>
       )}
-      {pips(3.4, -2.2, lv - 1)}
+      {!map && pips(3.4, -2.2, lv - 1)}
     </>
   );
 };
 
 /** Rocket pods hung from a pylon; rocket noses show per pod. */
-const pods: Design = (u, lv) => (
+const pods: Design = (u, lv, map) => (
   <>
     {blk(u, -1.6, -1.5, 3.2, 4, 'gun')}
     {units(lv).map((c, i) => {
@@ -178,12 +179,12 @@ const pods: Design = (u, lv) => (
       );
     })}
     {lv >= 8 && lite(-5.2, 17, 3.2, 0.9)}
-    {pips(2.2, -1.5, lv - 1)}
+    {!map && pips(2.2, -1.5, lv - 1)}
   </>
 );
 
 /** Underwing hardpoints: pylons along the wing, missiles racked under each. */
-const hardpoint: Design = (u, lv) => (
+const hardpoint: Design = (u, lv, map) => (
   <>
     {units(lv).map((c, i) => {
       const x = -i * 7.2;
@@ -204,7 +205,7 @@ const hardpoint: Design = (u, lv) => (
         </g>
       );
     })}
-    {pips(3, -2.4, lv - 1)}
+    {!map && pips(3, -2.4, lv - 1)}
   </>
 );
 
@@ -212,7 +213,7 @@ type PlateShape = 'skirt' | 'belly' | 'fairing';
 /** Armour plates: rows of panels on a rail, each new row layered in front. */
 const plates =
   (shape: PlateShape): Design =>
-  (u, lv) => {
+  (u, lv, map) => {
     const us = units(lv);
     const pw = shape === 'fairing' ? 5.8 : 5.2;
     const ph = shape === 'fairing' ? 4.2 : 6.4;
@@ -248,13 +249,13 @@ const plates =
         ))}
         {lv >= 8 && <rect x={2 * ox} y={2 * oy + 0.2} width={us[2] * (pw + 0.3) - 0.3} height={1.5} fill={`url(#${u}haz)`} stroke={OL} strokeWidth={0.3} />}
         {lv >= 10 && lite(2 * ox + 0.5, 2 * oy + ph - 1.6, 3 * (pw + 0.3) - 1.3, 0.8)}
-        {pips(railW - 0.6, -2.9, lv - 1)}
+        {!map && pips(railW - 0.6, -2.9, lv - 1)}
       </>
     );
   };
 
 /** Exhaust housings stacked down the rear; pipes stick out per housing. */
-const exhaust: Design = (u, lv) => (
+const exhaust: Design = (u, lv, map) => (
   <>
     {units(lv).map((c, i) => {
       const y = -i * 5.8;
@@ -272,12 +273,12 @@ const exhaust: Design = (u, lv) => (
       );
     })}
     {lv >= 10 && lite(6.2, -10.8, 0.9, 15)}
-    {pips(7.6, 0, lv - 1)}
+    {!map && pips(7.6, 0, lv - 1)}
   </>
 );
 
 /** Engine nacelles: intake fan at the front, cyan bands per nacelle. */
-const turbine: Design = (u, lv) => {
+const turbine: Design = (u, lv, map) => {
   const us = units(lv);
   return (
     <>
@@ -299,13 +300,13 @@ const turbine: Design = (u, lv) => {
           </g>
         );
       })}
-      {pips(1.8, -2.6, lv - 1)}
+      {!map && pips(1.8, -2.6, lv - 1)}
     </>
   );
 };
 
 /** Antenna cluster: mast groups on small bases, radar bar and dish added. */
-const antenna: Design = (u, lv) => (
+const antenna: Design = (u, lv, map) => (
   <>
     {units(lv).map((c, i) => {
       const x = i * 6.4;
@@ -324,12 +325,12 @@ const antenna: Design = (u, lv) => (
         </g>
       );
     })}
-    {pips(-2.5, 0.8, lv - 1)}
+    {!map && pips(-2.5, 0.8, lv - 1)}
   </>
 );
 
 /** Sensor balls on a nose bracket; one cyan lens per level in each ball. */
-const sensor: Design = (u, lv) => (
+const sensor: Design = (u, lv, map) => (
   <>
     {blk(u, -1.4, -1, 2.8, 3.6, 'gun', 0.6)}
     {units(lv).map((c, i) => ({c, i})).reverse().map(({c, i}) => {
@@ -347,12 +348,12 @@ const sensor: Design = (u, lv) => (
         </g>
       );
     })}
-    {pips(-7.2, -1, lv - 1)}
+    {!map && pips(-7.2, -1, lv - 1)}
   </>
 );
 
 /** Satcom domes on a base plate; cyan band segments per dome. */
-const dome: Design = (u, lv) => (
+const dome: Design = (u, lv, map) => (
   <>
     {units(lv).map((c, i) => {
       const x = -i * 8.2;
@@ -369,7 +370,7 @@ const dome: Design = (u, lv) => (
         </g>
       );
     })}
-    {pips(6.2, -0.4, lv - 1)}
+    {!map && pips(6.2, -0.4, lv - 1)}
   </>
 );
 
@@ -397,7 +398,7 @@ const tube = (u: string, x: number, y: number, len: number, r: number, m: Mat = 
 );
 
 const ARMOUR_KIT: ServiceDef[] = [
-  {id: 'tow-shackles', name: 'Tow shackles', x: 83, y: 63, s: 1.9, draw: (u) => (
+  {id: 'tow-shackles', name: 'Tow shackles', x: 58, y: 64, s: 1.5, draw: (u) => (
     <>
       {blk(u, -4.5, 0, 9, 2.6, 'gun', 0.6, 0.5)}
       {[-2.4, 2.4].map((dx) => (
@@ -408,11 +409,12 @@ const ARMOUR_KIT: ServiceDef[] = [
       ))}
     </>
   )},
-  {id: 'track-guards', name: 'Track guards', x: 84, y: 51, s: 1.4, draw: (u) => (
+  {id: 'track-guards', name: 'Track guards', x: 70, y: 61, s: 1.3, draw: (u) => (
     <>
-      <path d="M-5 0h9l2 3v5h-3l-1-4h-7z" fill={fill(u, 'olive')} stroke={OL} strokeWidth={0.55} />
-      <path d="M-4.4 1h8" stroke={MAT.olive[0]} strokeWidth={0.6} className="ra-nf" />
-      <rect x={3.2} y={4.4} width={2.6} height={3.4} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.35} />
+      {/* A mudguard lying along the top of the front track run, not a bar sticking out. */}
+      <path d="M0 0l12 -3.2v2.4l-12 3.2z" fill={fill(u, 'olive')} stroke={OL} strokeWidth={0.55} />
+      <path d="M0.6 0.4l10.8 -2.9" stroke={MAT.olive[0]} strokeWidth={0.5} className="ra-nf" />
+      <path d="M12 -0.8v3.2l-1.6 .4v-3.2z" fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.35} />
     </>
   )},
   {id: 'smoke-launchers', name: 'Smoke grenade launchers', x: 23, y: 26, s: 1.9, draw: (u) => (
@@ -443,12 +445,14 @@ const ARMOUR_KIT: ServiceDef[] = [
       ))}
     </>
   )},
-  {id: 'bustle-rack', name: 'Turret stowage rack', x: 9, y: 20, s: 1.9, draw: (u) => (
+  {id: 'bustle-rack', name: 'Turret stowage rack', x: 16, y: 25, s: 1.5, draw: (u) => (
     <>
-      <path d="M-4 5h10M-4 0h10M-4 0v5M1 0v5M6 0v5" stroke={OL} strokeWidth={0.9} className="ra-nf" />
-      <path d="M-4 5h10M-4 0h10M-4 0v5M1 0v5M6 0v5" stroke={MAT.gun[0]} strokeWidth={0.45} className="ra-nf" />
-      {blk(u, -3.4, -2.6, 4, 3.4, 'olive', 0.5, 0.4)}
-      {blk(u, 1.2, -1.8, 4, 2.6, 'sand', 0.5, 0.4)}
+      {/* A closed basket bolted to the turret rear, crates inside: nothing hangs past the hull. */}
+      <path d="M0 0h9l1 4.2h-11z" fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.55} />
+      <path d="M1.4 0.6v3.4M3.6 0.6v3.4M5.8 0.6v3.4M8 0.6v3.4" stroke={MAT.gun[0]} strokeWidth={0.35} className="ra-nf" />
+      {blk(u, 0.4, -2.8, 3.8, 3.2, 'olive', 0.5, 0.4)}
+      {blk(u, 4.6, -2.2, 4, 2.6, 'sand', 0.5, 0.4)}
+      <path d="M-1 4.2h11" stroke={AMB} strokeWidth={0.5} className="ra-nf" />
     </>
   )},
   {id: 'jerry-cans', name: 'Jerry-can rack', x: 20, y: 39, s: 1.9, draw: (u) => (
@@ -567,18 +571,23 @@ const AIRCRAFT_KIT: ServiceDef[] = [
       <circle cx={95} cy={38} r={2.4} fill="#45e38a" stroke={OL} strokeWidth={0.4} className="ra-blink" />
     </>
   )},
-  {id: 'gps-blades', name: 'GPS antenna blades', x: 58, y: 44, s: 1.9, draw: (u) => (
+  {id: 'gps-blades', name: 'GPS antenna blades', x: 57, y: 44, s: 2.2, draw: (u) => (
     <>
       {[0, 3.6].map((dx) => (
-        <path key={dx} d={`M${dx} 0l1.2-3.6h1l-.2 3.6z`} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.35} />
+        <path key={dx} d={`M${dx} 0l1.2-3.6h1.2l-.2 3.6z`} fill={fill(u, 'sand')} stroke={OL} strokeWidth={0.4} />
       ))}
-      <rect x={-0.6} y={-0.1} width={6.4} height={1} rx={0.4} fill={MAT.gun[1]} stroke={OL} strokeWidth={0.25} />
+      <rect x={-0.6} y={-0.1} width={6.6} height={1.1} rx={0.4} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.3} />
     </>
   )},
-  {id: 'de-icing', name: 'Leading-edge de-icing boots', x: 70, y: 45.5, s: 1, draw: () => (
+  {id: 'de-icing', name: 'Leading-edge de-icing boots', x: 0, y: 0, s: 1, draw: () => (
     <>
-      <path d="M0 3.4L22 -6" stroke={OL} strokeWidth={1.7} strokeLinecap="round" className="ra-nf" />
-      <path d="M0 3.4L22 -6" stroke={AMB} strokeWidth={0.9} strokeLinecap="round" strokeDasharray="2.2 0.8" className="ra-nf" />
+      {/* Both wing leading edges get a dark boot with amber heating bands. */}
+      <path d="M68 47.4L93 37.6" stroke={OL} strokeWidth={2.8} strokeLinecap="round" className="ra-nf" />
+      <path d="M68 47.4L93 37.6" stroke={MAT.dark[1]} strokeWidth={1.9} strokeLinecap="round" className="ra-nf" />
+      <path d="M68 47.4L93 37.6" stroke={AMB} strokeWidth={1.1} strokeDasharray="2 1.2" className="ra-nf" />
+      <path d="M9 63.6L31 55.4" stroke={OL} strokeWidth={2.8} strokeLinecap="round" className="ra-nf" />
+      <path d="M9 63.6L31 55.4" stroke={MAT.dark[1]} strokeWidth={1.9} strokeLinecap="round" className="ra-nf" />
+      <path d="M9 63.6L31 55.4" stroke={AMB} strokeWidth={1.1} strokeDasharray="2 1.2" className="ra-nf" />
     </>
   )},
   {id: 'flare-pod', name: 'Tail flare dispenser', x: 20, y: 49, s: 1.9, draw: (u) => (
@@ -587,10 +596,10 @@ const AIRCRAFT_KIT: ServiceDef[] = [
       {[0, 1, 2].map((c) => <circle key={c} cx={1.3 + c * 1.8} cy={1.7} r={0.55} fill={MAT.dark[2]} stroke={AMB} strokeWidth={0.3} />)}
     </>
   )},
-  {id: 'datalink-blade', name: 'Ventral datalink antenna', x: 62, y: 61, s: 1.9, draw: (u) => (
+  {id: 'datalink-blade', name: 'Ventral datalink antenna', x: 61, y: 60.5, s: 2.3, draw: (u) => (
     <>
-      <path d="M0 0h4l-1.2 4.4h-1.6z" fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.4} />
-      <circle cx={2} cy={3.6} r={0.45} fill={CY} className="ra-blink" />
+      <path d="M0 0h4l-1.2 4.4h-1.6z" fill={fill(u, 'sand')} stroke={OL} strokeWidth={0.45} />
+      <circle cx={2} cy={3.4} r={0.55} fill={CY} stroke={OL} strokeWidth={0.2} className="ra-blink" />
     </>
   )},
   {id: 'conformal-tank', name: 'Conformal fuel tank', x: 36, y: 51, s: 1.9, draw: (u) => (
@@ -606,10 +615,12 @@ const AIRCRAFT_KIT: ServiceDef[] = [
       <path d="M7 66.2l-2.8-8.6 2-.8 3.6 8.6z" fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.45} />
     </>
   )},
-  {id: 'intake-guard', name: 'Engine intake guard', x: 55, y: 38, s: 1.2, draw: () => (
+  {id: 'intake-guard', name: 'Engine intake guard', x: 58.5, y: 38.2, s: 1, draw: (u) => (
     <>
-      <ellipse cx={0} cy={0} rx={1.6} ry={2.6} fill="none" stroke={OL} strokeWidth={1.1} className="ra-nf" />
-      <path d="M0 -2.6v5.2M-1.5 -1h3M-1.5 1h3" stroke={MAT.gun[0]} strokeWidth={0.5} className="ra-nf" />
+      {/* A solid mesh cover over the nacelle intake, amber rim so it reads at map size. */}
+      <ellipse cx={0} cy={0} rx={2.4} ry={3.2} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.6} />
+      <ellipse cx={0} cy={0} rx={1.9} ry={2.7} fill="none" stroke={AMB} strokeWidth={0.7} className="ra-nf" />
+      <path d="M-1.6 -1h3.2M-1.8 0.2h3.6M-1.6 1.4h3.2M0 -2.6v5.2" stroke={MAT.gun[0]} strokeWidth={0.35} className="ra-nf" />
     </>
   )},
 ];
@@ -643,7 +654,8 @@ function serviceCover(category: AssetCategory, step: number) {
   const d = SERVICE_KIT[serviceFamily(category)][step - 2];
   if (!d) return null;
   // Items drawn in absolute coordinates (lights, winglets) put their cover at their first point.
-  const [cx, cy] = d.x === 0 && d.y === 0 ? (d.id === 'nav-lights' ? [94, 38.4] : [95.6, 36]) : [d.x, d.y];
+  const ABS: Record<string, [number, number]> = {'nav-lights': [94, 38.4], winglets: [95.6, 36], 'de-icing': [80, 42.6]};
+  const [cx, cy] = d.x === 0 && d.y === 0 ? (ABS[d.id] ?? [50, 50]) : [d.x, d.y];
   return (
     <g data-cover={d.id} transform={`translate(${cx} ${cy})`} opacity={0.85}>
       <rect x={-1.7} y={-1.2} width={3.4} height={2.4} rx={0.5} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.4} />
@@ -654,12 +666,12 @@ function serviceCover(category: AssetCategory, step: number) {
 }
 
 /** Service components for a rank: fitted parts plus the cover on the next mount. `skipStep` leaves one step out (for the ceremony). */
-function serviceKitGroup(u: string, category: AssetCategory, rank: number, skipStep: number | null, glowStep: number | null = null) {
+function serviceKitGroup(u: string, category: AssetCategory, rank: number, skipStep: number | null, glowStep: number | null = null, map = false) {
   const r = lvl(rank);
   return (
     <g data-service={serviceFamily(category)}>
       {seq(r - 1).map((i) => (i + 2 === skipStep ? null : <g key={i}>{hl(i + 2 === glowStep, serviceDraw(u, category, i + 2))}</g>))}
-      {r < 10 && skipStep === null ? serviceCover(category, r + 1) : null}
+      {r < 10 && skipStep === null && !map ? serviceCover(category, r + 1) : null}
     </g>
   );
 }
@@ -694,24 +706,26 @@ const KIT: Record<AssetCategory, Record<PackageKey, Place>> = {
   fixed_wing: {armament: [hardpoint, 24, 54, 1.3], protection: [FAIRING, 56, 72, 1.2, 'skewY(12)'], propulsion: [turbine, 24, 32, 1.2], electronics: [sensor, 90, 52, 1.3]},
 };
 
-function kitPart(u: string, category: AssetCategory, pkg: PackageKey, level: number) {
+function kitPart(u: string, category: AssetCategory, pkg: PackageKey, level: number, map = false) {
   const [design, x, y, s, extra] = (KIT[category] ?? KIT.armour)[pkg];
   const lv = lvl(level);
+  // At map scale an empty mount is noise: nothing is fitted, so nothing is drawn.
+  if (lv <= 1 && map) return null;
   const k = lv <= 1 ? s : s * (0.9 + lv * 0.02);
-  return <g transform={`translate(${x} ${y}) scale(${k.toFixed(3)}) ${extra ?? ''}`}>{lv <= 1 ? socket() : design(u, lv)}</g>;
+  return <g transform={`translate(${x} ${y}) scale(${k.toFixed(3)}) ${extra ?? ''}`}>{lv <= 1 ? socket() : design(u, lv, map)}</g>;
 }
 
 const CHEV = 'M0 3.4 2.6 1.7 5.2 3.4V1.8L2.6 0 0 1.8Z';
 const SHIELD = 'M1.5 0H20.5Q22 0 22 1.5V14.5L11 23 0 14.5V1.5Q0 0 1.5 0Z';
 
-function rankPlate(u: string, rank: number) {
+function rankPlate(u: string, rank: number, map = false) {
   const r = lvl(rank);
   const tier = r >= 10 ? 3 : r >= 7 ? 2 : r >= 4 ? 1 : 0;
   const body: Mat = (['gun', 'olive', 'dark', 'sand'] as const)[tier];
   const trim = tier === 2 ? AMB : tier === 3 ? '#fff1c9' : MAT.sand[1];
   const cols = Math.ceil(r / 3);
   return (
-    <g transform="translate(77 76)">
+    <g data-rank-plate="1" transform={map ? 'translate(83.5 82) scale(0.72)' : 'translate(77 76)'}>
       {tier === 3 && <circle className="ra-nh" cx={11} cy={10} r={14} fill={`url(#${u}glow)`} />}
       <path d={SHIELD} fill={fill(u, body)} stroke={OL} strokeWidth={0.8} />
       <path d={SHIELD} transform="translate(1.7 1.5) scale(.845)" fill="none" stroke={trim} strokeWidth={0.8} className="ra-nf" />
@@ -751,17 +765,23 @@ function hl(on: boolean, part: ReactNode, big = false) {
 }
 
 type Hide = PackageKey | 'rank' | null;
-type KitProps = {category: AssetCategory; packages: Packages; rank: number; hide?: Hide; highlight?: Hide};
+/**
+ * `detail`: 'full' in the Hangar and ceremonies; 'map' on the ~50 px map sprite, which keeps every fitted
+ * component (the persistent every-rank change) but leaves out empty sockets, level pips and the next-mount
+ * cover, and draws a smaller rank plate.
+ */
+type KitProps = {category: AssetCategory; packages: Packages; rank: number; hide?: Hide; highlight?: Hide; detail?: 'full' | 'map'};
 
 /** All fitted components for an Asset, drawn in the 100x100 box over the hero render. */
-export function AssetKitGroup({category, packages, rank, hide = null, highlight = null}: KitProps) {
+export function AssetKitGroup({category, packages, rank, hide = null, highlight = null, detail = 'full'}: KitProps) {
   const u = useUid();
+  const map = detail === 'map';
   return (
-    <g>
+    <g data-detail={detail}>
       <Defs u={u} />
-      {PKGS.map((p) => (hide === p ? null : <g key={p}>{hl(highlight === p, kitPart(u, category, p, packages?.[p] ?? 1))}</g>))}
-      {serviceKitGroup(u, category, rank, hide === 'rank' ? lvl(rank) : null, highlight === 'rank' ? lvl(rank) : null)}
-      {hide !== 'rank' && hl(highlight === 'rank', rankPlate(u, rank))}
+      {PKGS.map((p) => (hide === p ? null : <g key={p}>{hl(highlight === p, kitPart(u, category, p, packages?.[p] ?? 1, map))}</g>))}
+      {serviceKitGroup(u, category, rank, hide === 'rank' ? lvl(rank) : null, highlight === 'rank' ? lvl(rank) : null, map)}
+      {hide !== 'rank' && hl(highlight === 'rank', rankPlate(u, rank, map))}
     </g>
   );
 }

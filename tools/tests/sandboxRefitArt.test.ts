@@ -16,8 +16,8 @@ import {SANDBOX_SEASON_1_TEST} from '../../shared/sandboxSeason';
 import {NO_PACKAGES} from '../../shared/upgrades';
 import {AssetKitGroup, RankPlateGroup, ServiceCoverGroup, ServiceItemGroup, serviceFamily, serviceItemFor, serviceItems} from '../../src/sandbox/RefitArt';
 
-const kit = (category: AssetCategory, rank: number, hide: 'rank' | null = null) =>
-  renderToStaticMarkup(createElement('svg', null, createElement(AssetKitGroup, {category, packages: NO_PACKAGES, rank, hide})));
+const kit = (category: AssetCategory, rank: number, hide: 'rank' | null = null, detail: 'full' | 'map' = 'full', packages = NO_PACKAGES) =>
+  renderToStaticMarkup(createElement('svg', null, createElement(AssetKitGroup, {category, packages, rank, hide, detail})));
 
 /** The service-kit group's markup alone (no rank plate, no packages), with instance ids normalised. */
 function serviceMarkup(markup: string): string {
@@ -100,5 +100,25 @@ test('the rank plate still changes every rank, alongside the equipment', () => {
     const plate = renderToStaticMarkup(createElement('svg', null, createElement(RankPlateGroup, {rank}))).replace(/ra[A-Za-z0-9]+(?=sand|olive|gun|dark|glow|cone|haz)/g, 'ID');
     assert.notEqual(plate, prev);
     prev = plate;
+  }
+});
+
+test('map detail keeps every fitted component but drops sockets, pips and the next-mount cover', () => {
+  const five = {armament: 5, protection: 5, propulsion: 5, electronics: 5};
+  for (const {id, category} of STARTERS) {
+    for (let rank = 1; rank <= 10; rank += 1) {
+      const full = kit(category, rank);
+      const map = kit(category, rank, null, 'map');
+      assert.deepEqual(equipIds(map), equipIds(full), `${id} rank ${rank}: the map shows the same fitted components`);
+      assert.deepEqual(coverIds(map), [], `${id} rank ${rank}: no next-mount cover on the map`);
+      assert.doesNotMatch(map, /data-socket=/, `${id} rank ${rank}: no empty sockets on the map`);
+      assert.match(map, /data-rank-plate=/, 'the rank plate is still shown');
+      if (rank < 10) assert.equal(coverIds(full).length, 1, 'the Hangar still marks the next mount');
+      assert.match(full, /data-socket=/, 'the Hangar still shows empty package mounts');
+      const fittedMap = kit(category, rank, null, 'map', five);
+      assert.doesNotMatch(fittedMap, /data-pips=/, `${id}: no level pips on the map`);
+      assert.match(kit(category, rank, null, 'full', five), /data-pips=/, 'the Hangar keeps level pips');
+      assert.equal((fittedMap.match(/data-equip=/g) ?? []).length, rank - 1);
+    }
   }
 });

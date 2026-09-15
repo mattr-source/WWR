@@ -226,7 +226,7 @@ function AssetSprite({held, x, y, share, disabled, mirror, motion}: {held: TaskA
         {/* The fitted kit stays on the Asset out on the map too (temporary prototype art). */}
         {category && (
           <g data-kit="1" transform={`translate(${-s / 2} ${-s * 0.9}) scale(${s / KIT_VIEWBOX})`}>
-            <AssetKitGroup category={category} packages={held.packages} rank={held.rank} />
+            <AssetKitGroup category={category} packages={held.packages} rank={held.rank} detail="map" />
           </g>
         )}
       </g>

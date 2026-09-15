@@ -60,7 +60,12 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
      - **Aircraft** (drone and fixed wing): air-data probe, wingtip navigation lights, GPS antenna blades,
        leading-edge de-icing boots, tail flare dispenser, ventral datalink antenna, conformal fuel tank,
        winglets, engine intake guard.
-     - At rank 10 they sit on the existing r10 render.
+     - At rank 10 they sit on the existing r10 render. Placements are checked on both the r01 and r10 renders of
+       all three starter Assets.
+     - **Two detail levels:** the Hangar and the ceremonies draw everything, including empty package mounts, level
+       pips and the next-mount cover. The ~50 px map sprite (`detail="map"`) keeps every fitted component and
+       module, so the per-rank change stays visible, but leaves out the empty mounts, pips and cover and uses a
+       smaller rank plate, to cut clutter.
      - `tools/tests/sandboxRefitArt.test.ts` renders the kit markup and checks, for each starter Asset, that
        every rank adds exactly one new component and keeps the earlier ones.
    - **Every upgrade plays a skippable install ceremony in the Hangar bay:** the old rank plate or package module
@@ -110,14 +115,20 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
   - No approved robot or Dominion art exists yet. No paid or generated images were used.
 - The rejected flat unit SVGs (`public/sandbox/units/*`) and the old `Battlefield.tsx` are removed.
 
-## Needs Matt's decision: Asset visuals per level
+## Asset visuals per level: which direction applies
 
-The Season 1 decisions (`docs/season-1/13-DECISIONS.md` §11, 2026-09-07) say Asset visuals change only at Service
-Rank milestones, that **package upgrades change no visuals**, and that there are **no layered component overlays**.
-Matt's later direction (2026-09-15, "Animated upgrades at each level even if its just one item") asks for a visible,
-persistent part at every level. The sandbox follows the later direction, as a labelled private prototype. Either
-the decision is updated (and overlay art commissioned), or the kit overlays come out and only the ceremony and
-numbers remain. Nothing in the live game changed.
+- **Sep 7:** the Season 1 decisions (`docs/season-1/13-DECISIONS.md` §11, 2026-09-07) say Asset visuals change
+  only at Service Rank milestones, that package upgrades change no visuals, and that there are no layered
+  component overlays.
+- **Sep 15:** Matt's later direction ("Animated upgrades at each level even if its just one item", with the
+  changed part staying visible) **supersedes Sep 7 for this private prototype sandbox**. No further approval is
+  needed to keep the per-level parts here.
+- **What this does not cover:**
+  - It is not a change to the live game.
+  - It is not approval of final overlay art.
+  - It is not authorization for paid image generation.
+  - Whether the live game adopts per-level overlays, and with what art, remains a separate art and production
+    decision.
 
 ## Saves
 

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="t">
+  <title id="t">WWR sandbox enemy: Dominion Walker (top-down, facing down). Original placeholder art.</title>
+  <g stroke="#1a1413" stroke-width="3" stroke-linejoin="round" stroke-linecap="round">
+    <ellipse cx="64" cy="68" rx="54" ry="46" fill="#000" fill-opacity=".18" stroke="none"/>
+    <!-- two heavy digitigrade feet -->
+    <path d="M36 30 L30 12 H46 Z M92 30 L98 12 H82 Z" fill="#3a2d2a"/>
+    <rect x="22" y="30" width="26" height="40" rx="8" fill="#5a3b33"/>
+    <rect x="80" y="30" width="26" height="40" rx="8" fill="#5a3b33"/>
+    <!-- hull -->
+    <path d="M38 36 H90 L100 62 L90 94 H38 L28 62 Z" fill="#7a2a22"/>
+    <path d="M46 44 H82 L90 62 L82 84 H46 L38 62 Z" fill="#9a3a2c" stroke-width="2"/>
+    <!-- shoulder cannons pointing down -->
+    <rect x="12" y="58" width="16" height="50" rx="3" fill="#4a3a36"/>
+    <rect x="100" y="58" width="16" height="50" rx="3" fill="#4a3a36"/>
+    <rect x="15" y="100" width="10" height="16" rx="2" fill="#2a211f"/>
+    <rect x="103" y="100" width="10" height="16" rx="2" fill="#2a211f"/>
+    <!-- cockpit visor -->
+    <path d="M50 84 H78 L72 104 H56 Z" fill="#2a211f"/>
+    <path d="M56 90 H72 L69 98 H59 Z" fill="#ffb347" stroke="none"/>
+    <!-- hazard stripes -->
+    <path d="M52 50 L60 58 M62 50 L70 58 M72 50 L80 58" fill="none" stroke="#f2d16b" stroke-width="3"/>
+  </g>
+</svg>

@@ -33,6 +33,53 @@ Nothing in it needs an account.
    - "+1/+5/+30 min" moves only the sandbox's own clock offset.
    - "Reset sandbox" clears the sandbox company.
 
+## Battlefield pass (2026-09-15)
+
+Matt's first test found the card layout felt boxy and needed graphics and motion. The screen is now
+a battlefield.
+
+**Layout (portrait first):**
+- **HUD (top):** company name, level and XP; the four sandbox supplies.
+- **Battlefield (fills the rest):** an illustrated salt basin in SVG.
+  - Depth: far ridges, haze, salt cracks, craters, rocks, tracks and drifting dust.
+  - The Dominion patrol is at the top, the company at the bottom, the Field Workshop in the corner.
+- **General Rider:** a compact overlay at the top of the field, one instruction at a time. It folds to a single objective line during a fight so it never covers the robots; tap to reopen.
+- **Action bar (bottom):** only what makes sense now (Start patrol / Fire volley / Collect supplies, plus Repair or Replace, Upgrade Workshop, and a dashed-amber "Test +5m" while a timer runs). The current tutorial step's button pulses.
+- **☰ Base sheet:** company roster with repair/replace, Workshop, service record (training kills apart from confirmed PvP = 0), combat log, and the test controls (+1/+5/+30 min, Reset sandbox). Tapping a unit also opens it.
+
+**Animation follows real state only.** `src/sandbox/beats.ts` compares the saved state before and
+after each action, plus the combat log lines the engine wrote for that volley, and builds a short
+timeline:
+- Support's patch beam, the Scout's target reticle, muzzle flashes, recoil and projectiles from the chassis that were actually ready.
+- Impacts and floating damage numbers equal to the real HP change; explosions and wrecks only for robots the engine destroyed.
+- Each surviving robot lunging and firing its real hit, then "Disabled" or "DESTROYED" exactly when the engine says so.
+- The win/loss banner with the real XP gained.
+- Crates lifting from wrecks and "+N" over the supply counters, equal to the real gain.
+- Workshop welding sparks, a crane and a progress ring with countdown; a repair drone and welding on a repairing chassis; a beacon for an inbound replacement.
+- Completion flares when a timer really finishes: workshop level-up, "Repaired", or a drop pod with the new serial. This fires whether the timer finishes on its own, from the test clock, or in another tab.
+
+HP bars catch up hit by hit; when the timeline ends the view equals the saved state.
+`tools/tests/sandboxBeats.test.ts` checks every timeline against the engine: damage sums, kill
+count, hit lines, shooters, final view and banners, across the tutorial and 14 later patrols with
+heals, disabled and destroyed chassis, and losses.
+
+**Input:** the action is applied and saved first, then played. Buttons lock while shots are in the
+air, and any second tap within 350 ms is ignored, so a double tap can't fire two volleys. The
+engine's action ids still stop replays as before.
+
+**Reduced motion:** with `prefers-reduced-motion` the timeline collapses to "now". There are no
+projectiles, movement or loops; state and HP update at once, and the numbers and banners fade in
+place.
+
+**Art (all original, no external or generated assets):**
+- New `public/sandbox/units/crawler.svg` and `walker.svg` (top-down Dominion robots).
+- The existing Scout/Assault/Support SVGs.
+- The terrain, workshop, crates, drones and effects are inline SVG/CSS in `Battlefield.tsx` and `sandbox.css`.
+- No canvas and no paid or image-generation calls. The approved fal scout render was not used.
+
+**Cost:** the sandbox chunk is 18 KB gzipped JS + 1 KB CSS, loaded only on `/sandbox`. The game's
+entry bundle is unchanged (66 KB).
+
 ## How it is isolated
 
 - **Engine:** `shared/sandbox.ts` is pure and deterministic, with no clock, randomness or I/O.
@@ -51,7 +98,7 @@ Nothing in it needs an account.
 `public/sandbox/units/{scout,assault,support}.svg` are copied unmodified
 from the reviewed art starter kit (`/srv/axiom/docs/wwr-art-prototype/assets/svg`,
 byte-identical). They are original hand-written SVG. The art connector was not
-imported. The enemy robots are inline SVG placeholders in `Sandbox.tsx`.
+imported. The enemy robots (`crawler.svg`, `walker.svg`) are original placeholders drawn for the sandbox.
 General Rider's portrait is the game's existing `/guide/rider-portrait.webp`.
 
 ## Private preview (for AXIOM to run; Matt only opens the link)
@@ -83,23 +130,24 @@ Then stop the `vite preview` process on port 4180.
 - `WWR_PREVIEW_HOSTS` is needed because Vite rejects an unlisted Host header (checked: 403 without it, 200 with it). It affects `vite preview` only, not the production build.
 - The existing `https://axiom.tail84303e.ts.net/` (port 443, AXIOM) is untouched. The preview uses port 8443.
 
-## Verified locally (2026-09-15)
+## Verified locally (2026-09-15, battlefield pass)
 
-- `npm test`: 96 pass (12 of them for the sandbox).
-- `tsc` clean on client and worker; `npm run build` passes its size budget. The sandbox is its own 9 KB gzipped chunk, so the entry bundle doesn't grow.
-- Headless Chromium at 390×844 (touch, mobile):
-  - the sign-in card opens `/sandbox`;
+- `npm test`: 103 pass (sandbox 12, battlefield timelines 7).
+- `tsc` clean on client and worker; `npm run build` passes its size budget.
+- Headless Chromium, 390×844 touch, run twice (normal motion and `prefers-reduced-motion`), on the private preview build:
   - the tutorial runs from step 1 to completed;
-  - reloading mid-fight resumes at the same round;
-  - after collecting and reloading, there is no "Collect" button;
-  - the Workshop reaches level 2 and the repair finishes via the test clock;
-  - the record shows 3 training kills and 0 confirmed PvP;
+  - a simultaneous double tap on Fire applied exactly one volley;
+  - reload after collecting shows no second Collect and the same supplies;
+  - the Workshop reaches level 2 and the repair finishes via Test +5m;
+  - all three company units stay visible while firing;
+  - the Base sheet shows training kills 3 and confirmed PvP 0, and has Reset;
   - only `wwr.sandbox.v1` is in storage;
-  - no horizontal overflow and no page errors.
+  - no horizontal overflow, no control under 44 px tall, no page errors.
 
 ## Not in this slice
 
 - The signed-in menu link can only be clicked with a running Worker, and that needs a local D1 migration, which wasn't authorized.
 - Strings are English only; the i18n pass hasn't been run.
+- The battlefield is one fixed portrait scene. Desktop shows the same scene centred with terrain filling the sides. There is no camera, zoom or unit movement across the map, and no sound.
 - Numbers are untuned beyond a playthrough script (`tools/sim/sandboxPlaythrough.ts`). Patrol 6 (a fourth robot) is a wall until the Workshop and company level catch up.
 - Not built yet: work orders, multiplayer, server persistence, and real PvP.

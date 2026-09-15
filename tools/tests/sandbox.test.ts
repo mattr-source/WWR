@@ -245,7 +245,7 @@ test('isolation: the sandbox writes one storage key and cannot reach the API or 
     assert.doesNotMatch(src, /\bfetch\s*\(|\/api\/|net\/api|from ['"][./]*worker|XMLHttpRequest|WebSocket|sendBeacon/, file);
     const imports = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
     for (const spec of imports) {
-      assert.ok(['react', '../../shared/sandbox', './store', './flag'].includes(spec), `${file} imports ${spec}`);
+      assert.ok(['react', '../../shared/sandbox', './store', './flag', './beats', './Battlefield'].includes(spec), `${file} imports ${spec}`);
     }
   }
   // And nothing in the live game or the Worker reads sandbox state.

@@ -99,7 +99,7 @@ opens the World view (the live game opens on the map), `#base` the base.
 | `src/live/BaseBoard.tsx` | `original/SandboxBaseBoard.tsx` | Painting covers the screen and pans; buildings at their pads with no permanent labels; one tap names a building, a second tap opens it; Command Center hit box; four Task Force slabs | Default placements; press-and-hold says moving buildings needs the server; slabs read the practice Task Force. |
 | `src/live/LiveApp.tsx` base header | `Sandbox.tsx` | Account left, RST clock centre, **World map** right | A "Practice sandbox" chip under the clock. |
 | `src/live/Chat.tsx` | `Comms.tsx` | Pinned bottom COMMS bar; full-screen panel with header, Close, Server/Alliance/Leadership/Private tabs, Private tab rows, composer | Offline: no channels, so tabs lock as live chat locks a channel-less tab; inputs and Send disabled; an offline notice. No messages invented. |
-| `src/live/guide/Guide.tsx` | `original/SandboxGuide.tsx` | Portrait bottom-left above Comms, bubble with Next / Skip tour, ✕ folds to the portrait, cyan pulse on the step's target, steps aside while a sheet is open | Drives the sandbox tutorial, saved locally. |
+| `src/live/guide/Guide.tsx` | `original/SandboxGuide.tsx` | Portrait bottom-left above Comms, bubble with Next / Skip tour, ✕ folds to the portrait, cyan pulse on the step's target, steps aside while a sheet is open | Drives the sandbox tutorial, saved locally. The screens reserve its measured height only while the walkthrough is running; once it is skipped or finished the World map and base board run down to Comms again, with no reload. |
 | `src/live/Squads.tsx` Task Force card | `original/SandboxPanels.tsx` `SquadSetup` | Name, slots-filled bar, drone line, 3×2 slot grid, repair button; opened from the Task Force slab at the bottom of the base | Six slots are the practice robots and Assets; a tap sends a unit or keeps it home. No band labels (positions are not used by practice battles). |
 | `PlayerPanel` in `LiveApp.tsx` | `AccountPanel` | Portrait and name, two-column readout, list of doors | Readout is practice supplies and test Credits; profile, customise, alliance, settings and sign out need the server and are not offered. |
 
@@ -187,8 +187,9 @@ from the base's Tactical Operations Center (where the live game keeps Events) an
   - The Asset kit modules, service components, rank plates and Field Workshop fittings. They are drawn over existing art so every
     level shows a visible change, but no per-level Asset or building art exists. The only real per-level Asset art
     change in Season 1 is the rank 10 render.
-  - The map carries a permanent label: "Temporary art: robots, Dominion machines, fitted kit"; Home Base carries
-    "Temporary art: robots, Asset kit".
+  - The World view carries a permanent label, "Temporary art: robots, Dominion machines, kit", in its own strip
+    between the map and General Rider / Comms, outside the map area, so it never covers a target, a unit or the base
+    nameplate. The base view shows no temporary art; its header chip says "Practice sandbox".
   - No approved robot or Dominion art exists yet. No paid or generated images were used.
 - The rejected flat unit SVGs (`public/sandbox/units/*`) and the old `Battlefield.tsx` are removed.
 

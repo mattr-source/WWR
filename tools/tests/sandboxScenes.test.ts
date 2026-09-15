@@ -243,3 +243,16 @@ test('squad line-up: set on the base, sent by Attack, and older saves without it
   // An unreadable line-up never drops a save.
   assert.equal(readSandbox({...old, squad: 'garbage'}).state?.squad, null);
 });
+
+test('review fixes: General Rider height is not reserved after the walkthrough; the temporary-art label lives outside the map', () => {
+  const shell = readFileSync(join(root, 'src/sandbox/Sandbox.tsx'), 'utf8');
+  const inset = /const bottomInset = ([^;]+);/.exec(shell);
+  assert.ok(inset, 'bottomInset is derived in one place');
+  assert.match(inset![1], /state\.tutorial\.completed/, 'a skipped or finished walkthrough reserves no guide height, even though the guide is unmounted');
+  const world = readFileSync(join(root, 'src/sandbox/original/WorldView.tsx'), 'utf8');
+  const strip = world.indexOf('data-notice-strip');
+  const column = world.indexOf('data-bottom-column');
+  assert.ok(strip > 0 && column > strip, 'the notice has its own strip before the bottom column');
+  assert.equal(world.slice(column).includes('{notice}'), false, 'the notice is not inside the bottom controls over the map');
+  assert.match(world, /bottom: mapBottom/, 'the map stops above the notice strip');
+});

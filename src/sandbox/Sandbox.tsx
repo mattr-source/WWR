@@ -245,7 +245,9 @@ export default function Sandbox() {
         ? 'world-map'
         : baseTarget;
   const chatH = 48;
-  const bottomInset = chatH + guideH;
+  // General Rider unmounts when the walkthrough ends (skipped or finished), so his last reported height must not linger.
+  // The guide dock stands 4 px above the Comms bar (bottom 3.25rem), so its inset includes that gap.
+  const bottomInset = chatH + (state.tutorial.completed || guideH === 0 ? 0 : guideH + 4);
   const fightOver = frame ? frame.over : null;
   const line = marchLine(state, now, fightOver, frame ? frame.round : null, e?.rounds.length ?? 0);
 
@@ -341,7 +343,7 @@ export default function Sandbox() {
             onRecall={() => act({type: 'march.recall'})}
             onSkip={() => act({type: 'clock.skipMarch'})}
             notice={
-              <p className="pointer-events-none rounded border border-amber-700/70 bg-black/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
+              <p className="pointer-events-none truncate text-[9px] font-semibold uppercase leading-tight tracking-wide text-amber-300" data-testid="map-temp-art">
                 Temporary art: robots, Dominion machines, kit
               </p>
             }

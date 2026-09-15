@@ -30,6 +30,8 @@ import {GameClock} from './GameClock';
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 2.6;
 const HOME_ZOOM = 1.7;
+/** Height of the practice notice strip under the map. */
+const NOTICE_H = 20;
 
 export function GridIcon() {
   return (
@@ -75,7 +77,10 @@ export default function WorldView({
   march: MarchLine | null;
   bottomInset: number;
   overlay?: ReactNode;
-  /** A practice-only label (temporary art), kept in the bottom column so it never sits on a target. */
+  /**
+   * A practice-only label (temporary art). It gets its own strip between the map and General Rider / Comms,
+   * outside the map area, so it can never cover a target, a unit or the base nameplate.
+   */
   notice?: ReactNode;
   onSelectSite: (id: string | null) => void;
   /** What the selection panel offers for a target: the Attack button, or why the squad cannot go. */
@@ -101,6 +106,8 @@ export default function WorldView({
     return {zoom, cx: Math.max(hw, Math.min(VIEW_W - hw, c.cx)), cy: Math.max(hh, Math.min(VIEW_H - hh, c.cy))};
   };
   // Zoom about the sector centre point cx,cy: the map layer is scaled and shifted, the HUD stays put.
+  const noticeH = notice ? NOTICE_H : 0;
+  const mapBottom = bottomInset + noticeH;
   const shiftX = (VIEW_W / 2 - cam.cx) / VIEW_W;
   const shiftY = (VIEW_H / 2 - cam.cy) / VIEW_H;
 
@@ -109,7 +116,8 @@ export default function WorldView({
       <div
         ref={box}
         className="absolute inset-x-0 top-0 overflow-hidden"
-        style={{bottom: bottomInset, touchAction: cam.zoom > 1 ? 'none' : 'auto'}}
+        style={{bottom: mapBottom, touchAction: cam.zoom > 1 ? 'none' : 'auto'}}
+        data-map-box
         onPointerDown={(e) => {
           if (cam.zoom <= 1) return;
           drag.current = {x: e.clientX, y: e.clientY, cx: cam.cx, cy: cam.cy, moved: false};
@@ -188,7 +196,13 @@ export default function WorldView({
       </div>
 
       {/* Everything pinned to the bottom of the map, in one column (WorldMap.tsx), above Comms and General Rider. */}
-      <div className="pointer-events-none absolute inset-x-3 z-30 flex flex-col gap-2" style={{bottom: `calc(${bottomInset + 16}px)`}} data-bottom-column>
+      {notice && (
+        <div className="pointer-events-none absolute inset-x-0 z-30 flex items-center justify-center overflow-hidden bg-[#0a0906] px-2" style={{bottom: bottomInset, height: NOTICE_H}} data-notice-strip>
+          {notice}
+        </div>
+      )}
+
+      <div className="pointer-events-none absolute inset-x-3 z-30 flex flex-col gap-2" style={{bottom: `calc(${mapBottom + 16}px)`}} data-bottom-column>
         {selected && (
           <div className="pointer-events-auto rounded border border-neutral-800 bg-black/85 p-3 backdrop-blur" role="dialog" aria-label={siteLabel(selected.kind)} data-selection-panel>
             <div className="flex items-start justify-between gap-3">
@@ -220,7 +234,6 @@ export default function WorldView({
                 {b.label}
               </button>
             ))}
-            <span className="min-w-0 max-w-[7.5rem]">{notice}</span>
           </div>
 
           <div className="flex flex-col items-end gap-2">

@@ -22,7 +22,7 @@ import {type ReactNode, useEffect, useState} from 'react';
 import {assetArtUrl} from '../../shared/assetVisuals';
 import {type Refit, type TaskAsset, assetOf, assetStats, workshopArmour, workshopRepairFactor} from '../../shared/sandbox';
 import {PACKAGE_ATTRIBUTE, PACKAGE_LABEL, type Packages} from '../../shared/upgrades';
-import {AssetKitGroup, AssetKitPartGroup, KIT_VIEWBOX, RankPlateGroup, WORKSHOP_VIEWBOX, WorkshopFittingGroup, WorkshopFittingsGroup} from './RefitArt';
+import {AssetKitGroup, AssetKitPartGroup, KIT_VIEWBOX, RankPlateGroup, ServiceCoverGroup, ServiceItemGroup, WORKSHOP_VIEWBOX, WorkshopFittingGroup, WorkshopFittingsGroup, serviceItemFor} from './RefitArt';
 import {TempArtTag, primary} from './ui';
 
 const REVEAL_MS = 3300;
@@ -129,14 +129,15 @@ export default function RefitCeremony({refit, assets, reduced, onDone}: {refit: 
     const renderChanges = oldUrl !== newUrl;
     if (refit.kind === 'asset-rank') {
       title = `${asset.name} · Service Rank ${refit.to}`;
-      removed = `Rank ${refit.from} plate`;
-      fitted = renderChanges ? `Rank ${refit.to} plate and the milestone render` : `Rank ${refit.to} plate`;
+      const item = serviceItemFor(asset.category, refit.to);
+      removed = item ? `${item.name} blanking cover and the Rank ${refit.from} plate` : `Rank ${refit.from} plate`;
+      fitted = `${item ? `${item.name}, ` : ''}Rank ${refit.to} plate${renderChanges ? ' and the milestone render' : ''}`;
     } else {
       title = `${asset.name} · ${PACKAGE_LABEL[refit.pkg]} ${refit.to}`;
       removed = refit.from === 1 ? `Empty ${PACKAGE_LABEL[refit.pkg]} mount` : `${PACKAGE_LABEL[refit.pkg]} ${refit.from} module`;
       fitted = `${PACKAGE_LABEL[refit.pkg]} ${refit.to} module`;
     }
-    note = `Attributes are the live game's (Service Rank and packages, shared/upgrades.ts). Sandbox HP and volley use them with test-only scaling. The ${renderChanges ? 'rank 10 render is existing art; the ' : ''}kit and rank plate are temporary prototype art.`;
+    note = `Attributes are the live game's (Service Rank and packages, shared/upgrades.ts). Sandbox HP and volley use them with test-only scaling. ${refit.kind === 'asset-rank' ? 'The service component is visual only: the rank\'s effect is the attribute change above. ' : ''}The ${renderChanges ? 'rank 10 render is existing art; the ' : ''}kit, service components and rank plate are temporary prototype art.`;
     const hidePart = refit.kind === 'asset-rank' ? 'rank' : refit.pkg;
     stage = (
       <div className="relative" style={{width: ART, height: ART}}>
@@ -148,10 +149,24 @@ export default function RefitCeremony({refit, assets, reduced, onDone}: {refit: 
         {!revealed && (
           <>
             <svg viewBox={`0 0 ${KIT_VIEWBOX} ${KIT_VIEWBOX}`} className="sbx-part-out pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-              {refit.kind === 'asset-rank' ? <RankPlateGroup rank={refit.from} /> : <AssetKitPartGroup category={asset.category} pkg={refit.pkg} level={refit.from} />}
+              {refit.kind === 'asset-rank' ? (
+                <>
+                  <ServiceCoverGroup category={asset.category} step={refit.to} />
+                  <RankPlateGroup rank={refit.from} />
+                </>
+              ) : (
+                <AssetKitPartGroup category={asset.category} pkg={refit.pkg} level={refit.from} />
+              )}
             </svg>
             <svg viewBox={`0 0 ${KIT_VIEWBOX} ${KIT_VIEWBOX}`} className="sbx-part-in pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-              {refit.kind === 'asset-rank' ? <RankPlateGroup rank={refit.to} /> : <AssetKitPartGroup category={asset.category} pkg={refit.pkg} level={refit.to} />}
+              {refit.kind === 'asset-rank' ? (
+                <>
+                  <ServiceItemGroup category={asset.category} step={refit.to} />
+                  <RankPlateGroup rank={refit.to} />
+                </>
+              ) : (
+                <AssetKitPartGroup category={asset.category} pkg={refit.pkg} level={refit.to} />
+              )}
             </svg>
             <div className="sbx-weld-burst pointer-events-none absolute left-1/2 top-1/3 h-14 w-14 -translate-x-1/2 rounded-full bg-amber-200/70 blur-md" />
             <div className="sbx-power-flash pointer-events-none absolute inset-0 rounded-full bg-cyan-300/40 blur-2xl" />

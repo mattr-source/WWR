@@ -50,9 +50,23 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
      differently.
    - **Prices** are the live provisional step prices (`rankStepCost` / `packageStepCost` in `shared/economy.ts`),
      paid in the sandbox in **test Credits**. The Tokens/Credits split rules are not imported.
+   - **Every Service Rank step 2–10 installs one service component suited to the Asset type** (visual only;
+     the rank's real effect is the live attribute change). The earlier components stay fitted, and a small
+     blanking cover marks the mount the next rank will use.
+     - **Armour** (also artillery and naval): tow shackles, track guards, smoke grenade launchers, commander's
+       sight, spare track links, turret stowage rack, jerry-can rack, remote weapon station, reactive armour bricks.
+     - **Rotary:** wire-strike cutter, flare dispensers, exhaust IR suppressor, rescue hoist, laser warning
+       receivers, refuelling probe, door gun mount, tail rotor guard, cockpit armour frame.
+     - **Aircraft** (drone and fixed wing): air-data probe, wingtip navigation lights, GPS antenna blades,
+       leading-edge de-icing boots, tail flare dispenser, ventral datalink antenna, conformal fuel tank,
+       winglets, engine intake guard.
+     - At rank 10 they sit on the existing r10 render.
+     - `tools/tests/sandboxRefitArt.test.ts` renders the kit markup and checks, for each starter Asset, that
+       every rank adds exactly one new component and keeps the earlier ones.
    - **Every upgrade plays a skippable install ceremony in the Hangar bay:** the old rank plate or package module
-     lifts off the Asset's own render and the new one drops on. At rank 10 the render itself changes to the existing
-     r10 art. Then the real before/after attributes, sandbox HP and volley.
+     lifts off the Asset's own render and the new one drops on. For a rank, that's the component's blanking cover
+     and the old plate out, the component and new plate in. At rank 10 the render itself also changes to the
+     existing r10 art. Then the real before/after attributes, sandbox HP and volley.
    - **The fitted kit stays visible:** it shows in the Hangar, on the target card's render and on the Asset on the map.
 10. **Field Workshop level-ups** (Robot Bay sheet) now play an **on-site** ceremony when the timer ends. The crane
     lowers the new fitting onto Matt's building art, then the before/after damage-taken and robot-repair factors
@@ -89,7 +103,7 @@ menu ("Field Sandbox (practice)"). It needs no account and never calls the API.
 - **Temporary vector art (labelled "Temporary art" on screen), not approved final art:**
   - The humanoid robots: five internal looks per part, from salvaged scrap at level 1 to glowing powered armour at level 50, plus a visible change at every tier.
   - The Dominion Crawler and Walker.
-  - The Asset kit modules, rank plates and Field Workshop fittings. They are drawn over existing art so every
+  - The Asset kit modules, service components, rank plates and Field Workshop fittings. They are drawn over existing art so every
     level shows a visible change, but no per-level Asset or building art exists. The only real per-level Asset art
     change in Season 1 is the rank 10 render.
   - The map carries a permanent label: "Temporary art: robots, Dominion machines, fitted kit".

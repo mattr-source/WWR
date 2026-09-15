@@ -60,7 +60,7 @@ import {
 import {SANDBOX_SEASON_1_TEST} from '../../shared/sandboxSeason';
 import {assetArtUrl} from '../../shared/assetVisuals';
 import {PACKAGE_ATTRIBUTE, PACKAGE_KEYS, PACKAGE_LABEL} from '../../shared/upgrades';
-import {AssetKitOverlay} from './RefitArt';
+import {AssetKitOverlay, serviceItemFor} from './RefitArt';
 import RefitCeremony from './RefitCeremony';
 import {battleFrame} from './beats';
 import InstallCeremony from './InstallCeremony';
@@ -70,6 +70,7 @@ import SectorMap from './SectorMap';
 import {SANDBOX_STORAGE_KEY, dispatchSandbox, openSandbox, resetSandbox} from './store';
 import {Bar, CostLine, SUPPLY_LABEL, SUPPLY_TONE, Section, Sheet, TempArtTag, clock, minutesLabel, primary, secondary, testButton} from './ui';
 import './sandbox.css';
+import './refitArt.css';
 
 const CONFIG = SANDBOX_SEASON_1_TEST;
 const ROUND_MS = CONFIG.roundSeconds * 1000;
@@ -692,7 +693,7 @@ function Hangar({state, now, onAct, onTestAdvance}: {state: SandboxState; now: n
                     </p>
                     {rank ? (
                       <>
-                        <p className="text-[12px] text-neutral-400">Raises every attribute.{rank.milestone ? ' Milestone: a double step, and the Asset\'s render changes.' : ' The rank plate is replaced.'}</p>
+                        <p className="text-[12px] text-neutral-400">Raises every attribute. Fits: {serviceItemFor(asset!.category, rank.to)?.name ?? 'a new rank plate'}.{rank.milestone ? ' Milestone: a double step, and the Asset\'s render changes.' : ''}</p>
                         {(['firepower', 'armour', 'mobility', 'range', 'detection'] as const).map((k) => (
                           <p key={k} className="flex justify-between font-mono text-[12px]">
                             <span className="font-sans text-neutral-400">{ATTR_LABEL[k]}</span>

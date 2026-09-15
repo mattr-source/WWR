@@ -10,13 +10,19 @@
  * and whatever was fitted stays drawn afterwards because every overlay is
  * drawn straight from the real levels.
  *
+ * Service Rank: every rank step 2..10 bolts on one SERVICE KIT component
+ * appropriate to the Asset type (armour, rotary, aircraft), and the parts
+ * already fitted stay drawn. A small blanking cover marks the mount the next
+ * rank will use; the rank ceremony removes that cover and installs the part.
+ * Visual only: the rank's real effect is the live attribute change.
+ *
  * Styled as chunky bevelled toy blocks to match the renders: sand / olive /
  * gunmetal, dark outline, light top band, shadow band, cyan light strips.
  */
 import {type CSSProperties, type ReactNode, useId} from 'react';
 import type {AssetCategory} from '../../shared/assets';
 import type {PackageKey, Packages} from '../../shared/upgrades';
-import './refitArt.css';
+// refitArt.css is imported by Sandbox.tsx, so this file stays importable from node tests.
 
 export const KIT_VIEWBOX = 100;
 export const WORKSHOP_VIEWBOX = {width: 512, height: 328};
@@ -367,6 +373,313 @@ const dome: Design = (u, lv) => (
   </>
 );
 
+// ── Service Rank kit: one component per rank step, per Asset family ───────
+
+export type ServiceFamily = 'armour' | 'rotary' | 'aircraft';
+export interface ServiceItem {
+  id: string;
+  /** The rank that installs it (2..10). */
+  step: number;
+  name: string;
+}
+type ServiceDef = {id: string; name: string; x: number; y: number; s: number; draw: (u: string) => ReactNode};
+
+/** Which kit family an Asset category draws. Artillery and naval use the armour kit; drones and jets the aircraft kit. */
+export function serviceFamily(category: AssetCategory): ServiceFamily {
+  return category === 'rotary' ? 'rotary' : category === 'drone' || category === 'fixed_wing' ? 'aircraft' : 'armour';
+}
+
+const tube = (u: string, x: number, y: number, len: number, r: number, m: Mat = 'gun') => (
+  <>
+    <rect x={x} y={y - r} width={len} height={r * 2} rx={r} fill={fill(u, m)} stroke={OL} strokeWidth={0.45} />
+    <ellipse cx={x + len} cy={y} rx={r * 0.55} ry={r} fill={MAT.dark[2]} stroke={OL} strokeWidth={0.35} />
+  </>
+);
+
+const ARMOUR_KIT: ServiceDef[] = [
+  {id: 'tow-shackles', name: 'Tow shackles', x: 83, y: 63, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, -4.5, 0, 9, 2.6, 'gun', 0.6, 0.5)}
+      {[-2.4, 2.4].map((dx) => (
+        <path key={dx} d={`M${dx - 1.4} 2.4v2.6a1.4 1.4 0 0 0 2.8 0v-2.6`} fill="none" stroke={OL} strokeWidth={1.5} className="ra-nf" />
+      ))}
+      {[-2.4, 2.4].map((dx) => (
+        <path key={`i${dx}`} d={`M${dx - 1.4} 2.4v2.6a1.4 1.4 0 0 0 2.8 0v-2.6`} fill="none" stroke={AMB} strokeWidth={0.7} className="ra-nf" />
+      ))}
+    </>
+  )},
+  {id: 'track-guards', name: 'Track guards', x: 84, y: 51, s: 1.4, draw: (u) => (
+    <>
+      <path d="M-5 0h9l2 3v5h-3l-1-4h-7z" fill={fill(u, 'olive')} stroke={OL} strokeWidth={0.55} />
+      <path d="M-4.4 1h8" stroke={MAT.olive[0]} strokeWidth={0.6} className="ra-nf" />
+      <rect x={3.2} y={4.4} width={2.6} height={3.4} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.35} />
+    </>
+  )},
+  {id: 'smoke-launchers', name: 'Smoke grenade launchers', x: 23, y: 26, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, -1, 1.5, 7, 3, 'gun', 0.6, 0.45)}
+      {[0, 1, 2, 3].map((i) => (
+        <g key={i} transform={`translate(${i * 1.6} 0) rotate(-35)`}>
+          {tube(u, 0, 0, 4, 0.75, 'olive')}
+        </g>
+      ))}
+    </>
+  )},
+  {id: 'commander-sight', name: "Commander's sight", x: 31, y: 12, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, -3, 2, 6, 3, 'gun', 0.6, 0.45)}
+      {blk(u, -2.2, -2.4, 4.4, 4.6, 'sand', 0.8, 0.5)}
+      <rect x={-1.6} y={-1.6} width={3.2} height={1.5} rx={0.4} fill="#0c1417" stroke={CY} strokeWidth={0.45} className="ra-blink" />
+    </>
+  )},
+  {id: 'spare-track', name: 'Spare track links', x: 58, y: 50, s: 1.9, draw: (u) => (
+    <>
+      {[0, 1, 2, 3].map((i) => (
+        <g key={i}>
+          <rect x={i * 2.7} y={i * -0.7} width={2.5} height={5.2} rx={0.5} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.4} />
+          <rect x={i * 2.7 + 0.5} y={i * -0.7 + 1.4} width={1.5} height={0.6} fill={MAT.gun[0]} />
+          <rect x={i * 2.7 + 0.5} y={i * -0.7 + 3.2} width={1.5} height={0.6} fill={MAT.gun[0]} />
+        </g>
+      ))}
+    </>
+  )},
+  {id: 'bustle-rack', name: 'Turret stowage rack', x: 9, y: 20, s: 1.9, draw: (u) => (
+    <>
+      <path d="M-4 5h10M-4 0h10M-4 0v5M1 0v5M6 0v5" stroke={OL} strokeWidth={0.9} className="ra-nf" />
+      <path d="M-4 5h10M-4 0h10M-4 0v5M1 0v5M6 0v5" stroke={MAT.gun[0]} strokeWidth={0.45} className="ra-nf" />
+      {blk(u, -3.4, -2.6, 4, 3.4, 'olive', 0.5, 0.4)}
+      {blk(u, 1.2, -1.8, 4, 2.6, 'sand', 0.5, 0.4)}
+    </>
+  )},
+  {id: 'jerry-cans', name: 'Jerry-can rack', x: 20, y: 39, s: 1.9, draw: (u) => (
+    <>
+      {[0, 1, 2].map((i) => (
+        <g key={i}>
+          {blk(u, i * 3.1, 0, 2.8, 4.6, 'olive', 0.5, 0.4)}
+          <path d={`M${i * 3.1 + 0.6} 1.2l1.6 2.2M${i * 3.1 + 2.2} 1.2l-1.6 2.2`} stroke={MAT.olive[2]} strokeWidth={0.4} className="ra-nf" />
+        </g>
+      ))}
+      <rect x={-0.4} y={4.2} width={9.8} height={0.9} fill={`url(#${u}haz)`} stroke={OL} strokeWidth={0.25} />
+    </>
+  )},
+  {id: 'weapon-station', name: 'Remote weapon station', x: 41, y: 10, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, -3, 0, 6, 3.4, 'gun', 0.8, 0.5)}
+      {tube(u, 2, 1.2, 6.5, 0.6, 'dark')}
+      <rect x={-1.8} y={-1.8} width={2.6} height={2} rx={0.4} fill={fill(u, 'sand')} stroke={OL} strokeWidth={0.35} />
+      <circle cx={-0.5} cy={-0.8} r={0.5} fill={CY} className="ra-blink" />
+    </>
+  )},
+  {id: 'reactive-armour', name: 'Reactive armour bricks', x: 42, y: 34, s: 1.9, draw: (u) => (
+    <>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <g key={i}>
+          {blk(u, i * 3, (i % 2) * 0.4, 2.8, 3.4, i % 2 ? 'sand' : 'olive', 0.4, 0.4)}
+          <circle cx={i * 3 + 1.4} cy={(i % 2) * 0.4 + 1.7} r={0.35} fill={OL} />
+        </g>
+      ))}
+    </>
+  )},
+];
+
+const ROTARY_KIT: ServiceDef[] = [
+  {id: 'wire-cutter', name: 'Wire-strike cutter', x: 86, y: 43, s: 1.9, draw: (u) => (
+    <>
+      <path d="M0 0l5 -3l-1 3.4l3 -1.8l-1.4 3.2l-5.6 1.4z" fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.45} />
+      <path d="M1 0.6l4.2-2.4" stroke="#fff" strokeWidth={0.4} opacity={0.6} className="ra-nf" />
+    </>
+  )},
+  {id: 'flare-dispensers', name: 'Flare dispensers', x: 12, y: 47, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, 0, 0, 7, 4, 'gun', 0.6, 0.45)}
+      {[0, 1, 2].map((c) => [0, 1].map((r) => <circle key={`${c}${r}`} cx={1.5 + c * 2} cy={1.2 + r * 1.6} r={0.55} fill={MAT.dark[2]} stroke={AMB} strokeWidth={0.3} />))}
+    </>
+  )},
+  {id: 'ir-suppressor', name: 'Exhaust IR suppressor', x: 35, y: 33, s: 1.9, draw: (u) => (
+    <>
+      <path d="M0 0q-5 0-6 5l2.4.6q1-3 3.6-3z" fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.5} />
+      <path d="M-5.6 4.8q.8-2.6 3.2-2.8" stroke="#ff8a3a" strokeWidth={0.5} className="ra-nf" />
+      {blk(u, -0.6, -1.6, 3.4, 3.4, 'gun', 0.5, 0.4)}
+    </>
+  )},
+  {id: 'rescue-hoist', name: 'Rescue hoist', x: 64, y: 38, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, -2, -1, 7, 2.6, 'sand', 0.6, 0.45)}
+      <path d="M4.2 1.4v5" stroke={OL} strokeWidth={0.5} className="ra-nf" />
+      <path d="M3.4 6.4a0.9 0.9 0 1 0 1.8 0" fill="none" stroke={AMB} strokeWidth={0.6} className="ra-nf" />
+      <circle cx={-0.4} cy={0.3} r={0.8} fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.3} />
+    </>
+  )},
+  {id: 'laser-warning', name: 'Laser warning receivers', x: 79, y: 57, s: 1.9, draw: (u) => (
+    <>
+      {[0, 4.2].map((dx) => (
+        <g key={dx}>
+          <path d={`M${dx - 1.6} 1.2a1.6 1.6 0 0 1 3.2 0z`} fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.4} />
+          <circle cx={dx} cy={0.4} r={0.45} fill={CY} className="ra-blink" />
+          <rect x={dx - 1.9} y={1.1} width={3.8} height={0.8} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.25} />
+        </g>
+      ))}
+    </>
+  )},
+  {id: 'refuel-probe', name: 'Refuelling probe', x: 84, y: 49, s: 1.2, draw: (u) => (
+    <>
+      {tube(u, 0, 0, 9, 0.6, 'gun')}
+      <path d="M9 -1.1l1.8 1.1-1.8 1.1z" fill={AMB} stroke={OL} strokeWidth={0.3} />
+      {blk(u, -1.2, -1.3, 2.6, 2.6, 'sand', 0.5, 0.35)}
+    </>
+  )},
+  {id: 'door-gun', name: 'Door gun mount', x: 56, y: 50, s: 1.9, draw: (u) => (
+    <>
+      <path d="M0 0v4" stroke={OL} strokeWidth={0.8} className="ra-nf" />
+      {blk(u, -1.4, -1.6, 3, 2, 'gun', 0.4, 0.35)}
+      {tube(u, 1.4, -0.6, 5.5, 0.5, 'dark')}
+      <rect x={-1} y={0.4} width={2.2} height={1.6} fill={fill(u, 'olive')} stroke={OL} strokeWidth={0.3} />
+    </>
+  )},
+  {id: 'tail-rotor-guard', name: 'Tail rotor guard', x: 6, y: 40, s: 1.9, draw: (u) => (
+    <>
+      <path d="M-2 0a6 6 0 0 1 8 -6" fill="none" stroke={OL} strokeWidth={1.6} className="ra-nf" />
+      <path d="M-2 0a6 6 0 0 1 8 -6" fill="none" stroke={MAT.sand[1]} strokeWidth={0.8} className="ra-nf" />
+      <rect x={-2.8} y={-0.6} width={2} height={1.8} fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.3} />
+    </>
+  )},
+  {id: 'cockpit-armour', name: 'Cockpit armour frame', x: 72, y: 38, s: 1.9, draw: (u) => (
+    <>
+      <path d="M0 6l2.2-6h8.4l1.4 6" fill="none" stroke={OL} strokeWidth={1.4} className="ra-nf" />
+      <path d="M0 6l2.2-6h8.4l1.4 6M6.4 0v6" fill="none" stroke={MAT.gun[0]} strokeWidth={0.7} className="ra-nf" />
+      {blk(u, -0.4, 5.2, 12.8, 1.6, 'sand', 0.5, 0.35)}
+    </>
+  )},
+];
+
+const AIRCRAFT_KIT: ServiceDef[] = [
+  {id: 'air-data-probe', name: 'Air-data probe', x: 86, y: 59, s: 1.9, draw: (u) => (
+    <>
+      <path d="M0 0l7 1.6" stroke={OL} strokeWidth={0.9} className="ra-nf" />
+      <path d="M0 0l7 1.6" stroke={MAT.gun[0]} strokeWidth={0.45} className="ra-nf" />
+      <circle cx={7} cy={1.6} r={0.45} fill={AMB} />
+      {blk(u, -1.6, -1, 2.4, 2, 'gun', 0.4, 0.3)}
+    </>
+  )},
+  {id: 'nav-lights', name: 'Wingtip navigation lights', x: 0, y: 0, s: 1, draw: () => (
+    <>
+      <circle cx={7} cy={65.4} r={2.4} fill="#ff4d4d" stroke={OL} strokeWidth={0.4} className="ra-blink" />
+      <circle cx={95} cy={38} r={2.4} fill="#45e38a" stroke={OL} strokeWidth={0.4} className="ra-blink" />
+    </>
+  )},
+  {id: 'gps-blades', name: 'GPS antenna blades', x: 58, y: 44, s: 1.9, draw: (u) => (
+    <>
+      {[0, 3.6].map((dx) => (
+        <path key={dx} d={`M${dx} 0l1.2-3.6h1l-.2 3.6z`} fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.35} />
+      ))}
+      <rect x={-0.6} y={-0.1} width={6.4} height={1} rx={0.4} fill={MAT.gun[1]} stroke={OL} strokeWidth={0.25} />
+    </>
+  )},
+  {id: 'de-icing', name: 'Leading-edge de-icing boots', x: 70, y: 45.5, s: 1, draw: () => (
+    <>
+      <path d="M0 3.4L22 -6" stroke={OL} strokeWidth={1.7} strokeLinecap="round" className="ra-nf" />
+      <path d="M0 3.4L22 -6" stroke={AMB} strokeWidth={0.9} strokeLinecap="round" strokeDasharray="2.2 0.8" className="ra-nf" />
+    </>
+  )},
+  {id: 'flare-pod', name: 'Tail flare dispenser', x: 20, y: 49, s: 1.9, draw: (u) => (
+    <>
+      {blk(u, 0, 0, 6, 3.4, 'gun', 0.5, 0.4)}
+      {[0, 1, 2].map((c) => <circle key={c} cx={1.3 + c * 1.8} cy={1.7} r={0.55} fill={MAT.dark[2]} stroke={AMB} strokeWidth={0.3} />)}
+    </>
+  )},
+  {id: 'datalink-blade', name: 'Ventral datalink antenna', x: 62, y: 61, s: 1.9, draw: (u) => (
+    <>
+      <path d="M0 0h4l-1.2 4.4h-1.6z" fill={fill(u, 'dark')} stroke={OL} strokeWidth={0.4} />
+      <circle cx={2} cy={3.6} r={0.45} fill={CY} className="ra-blink" />
+    </>
+  )},
+  {id: 'conformal-tank', name: 'Conformal fuel tank', x: 36, y: 51, s: 1.9, draw: (u) => (
+    <>
+      <rect x={0} y={0} width={13} height={3.6} rx={1.8} fill={fill(u, 'sand')} stroke={OL} strokeWidth={0.5} />
+      <rect x={1.4} y={0.6} width={8} height={0.8} rx={0.4} fill="#fff" opacity={0.4} />
+      <rect x={10} y={0.3} width={0.8} height={3} fill={MAT.dark[1]} />
+    </>
+  )},
+  {id: 'winglets', name: 'Winglets', x: 0, y: 0, s: 1, draw: (u) => (
+    <>
+      <path d="M93.5 39l4-9 2 .8-2.6 9.4z" fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.45} />
+      <path d="M7 66.2l-2.8-8.6 2-.8 3.6 8.6z" fill={fill(u, 'gun')} stroke={OL} strokeWidth={0.45} />
+    </>
+  )},
+  {id: 'intake-guard', name: 'Engine intake guard', x: 55, y: 38, s: 1.2, draw: () => (
+    <>
+      <ellipse cx={0} cy={0} rx={1.6} ry={2.6} fill="none" stroke={OL} strokeWidth={1.1} className="ra-nf" />
+      <path d="M0 -2.6v5.2M-1.5 -1h3M-1.5 1h3" stroke={MAT.gun[0]} strokeWidth={0.5} className="ra-nf" />
+    </>
+  )},
+];
+
+const SERVICE_KIT: Record<ServiceFamily, ServiceDef[]> = {armour: ARMOUR_KIT, rotary: ROTARY_KIT, aircraft: AIRCRAFT_KIT};
+
+/** The service component a rank step installs (rank 2..10), or null. */
+export function serviceItemFor(category: AssetCategory, rank: number): ServiceItem | null {
+  const r = Math.floor(rank);
+  const d = SERVICE_KIT[serviceFamily(category)][r - 2];
+  return d ? {id: d.id, step: r, name: d.name} : null;
+}
+
+/** Every service component fitted at a rank, in install order. */
+export function serviceItems(category: AssetCategory, rank: number): ServiceItem[] {
+  return seq(Math.max(0, lvl(rank) - 1)).map((i) => serviceItemFor(category, i + 2)!).filter(Boolean);
+}
+
+function serviceDraw(u: string, category: AssetCategory, step: number) {
+  const d = SERVICE_KIT[serviceFamily(category)][step - 2];
+  if (!d) return null;
+  return (
+    <g data-equip={d.id} transform={`translate(${d.x} ${d.y}) scale(${d.s})`}>
+      {d.draw(u)}
+    </g>
+  );
+}
+
+/** The blanking cover over the mount the given rank step will use. */
+function serviceCover(category: AssetCategory, step: number) {
+  const d = SERVICE_KIT[serviceFamily(category)][step - 2];
+  if (!d) return null;
+  // Items drawn in absolute coordinates (lights, winglets) put their cover at their first point.
+  const [cx, cy] = d.x === 0 && d.y === 0 ? (d.id === 'nav-lights' ? [94, 38.4] : [95.6, 36]) : [d.x, d.y];
+  return (
+    <g data-cover={d.id} transform={`translate(${cx} ${cy})`} opacity={0.85}>
+      <rect x={-1.7} y={-1.2} width={3.4} height={2.4} rx={0.5} fill={MAT.dark[1]} stroke={OL} strokeWidth={0.4} />
+      <circle cx={-1} cy={0} r={0.3} fill={MAT.gun[0]} />
+      <circle cx={1} cy={0} r={0.3} fill={MAT.gun[0]} />
+    </g>
+  );
+}
+
+/** Service components for a rank: fitted parts plus the cover on the next mount. `skipStep` leaves one step out (for the ceremony). */
+function serviceKitGroup(u: string, category: AssetCategory, rank: number, skipStep: number | null, glowStep: number | null = null) {
+  const r = lvl(rank);
+  return (
+    <g data-service={serviceFamily(category)}>
+      {seq(r - 1).map((i) => (i + 2 === skipStep ? null : <g key={i}>{hl(i + 2 === glowStep, serviceDraw(u, category, i + 2))}</g>))}
+      {r < 10 && skipStep === null ? serviceCover(category, r + 1) : null}
+    </g>
+  );
+}
+
+/** One rank step's service component alone (ceremony drop-in). */
+export function ServiceItemGroup({category, step}: {category: AssetCategory; step: number}) {
+  const u = useUid();
+  return (
+    <g>
+      <Defs u={u} />
+      {serviceDraw(u, category, Math.floor(step))}
+    </g>
+  );
+}
+
+/** The blanking cover a rank step removes (ceremony lift-off). */
+export function ServiceCoverGroup({category, step}: {category: AssetCategory; step: number}) {
+  return <g>{serviceCover(category, Math.floor(step))}</g>;
+}
+
 /** [design, x, y, scale, extra transform] for each package, per category. */
 type Place = [Design, number, number, number, string?];
 const SKIRT = plates('skirt');
@@ -447,6 +760,7 @@ export function AssetKitGroup({category, packages, rank, hide = null, highlight 
     <g>
       <Defs u={u} />
       {PKGS.map((p) => (hide === p ? null : <g key={p}>{hl(highlight === p, kitPart(u, category, p, packages?.[p] ?? 1))}</g>))}
+      {serviceKitGroup(u, category, rank, hide === 'rank' ? lvl(rank) : null, highlight === 'rank' ? lvl(rank) : null)}
       {hide !== 'rank' && hl(highlight === 'rank', rankPlate(u, rank))}
     </g>
   );
